@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Browse Jobs — 9 to 5</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <main class="container">
+    <section class="hero">
+      <h1>Open jobs near you</h1>
+      <p>Find work that matches your trade and apply in one click.</p>
+      <form class="search-bar" id="jobSearch" role="search">
+        <input type="search" name="q" placeholder="Search jobs (e.g. leak, fan)" aria-label="Search">
+        <select name="trade" id="tradeFilter" aria-label="Trade"><option value="">All trades</option></select>
+        <input type="search" name="location" placeholder="Location" aria-label="Location">
+        <button class="btn" type="submit">Search</button>
+      </form>
+    </section>
+    <div id="jobsList" class="list" aria-live="polite"></div>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/jobs.js"></script>
+</body>
+</html>

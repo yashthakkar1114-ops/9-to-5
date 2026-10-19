@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Post a Job — 9 to 5</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <main class="container auth-wrap wide">
+    <h1 class="page-title" id="formTitle">Post a Job</h1>
+    <p class="page-sub">Labourers in your area will see it and apply.</p>
+    <form id="postJobForm" class="card form-card">
+      <div class="form-grid">
+        <label class="full">Job title <input name="title" required minlength="3" placeholder="e.g. Fix bathroom leak"></label>
+        <label>Trade needed <select name="trade" required id="tradeSelect"></select></label>
+        <label>Location <input name="location" required placeholder="e.g. Bandra West"></label>
+        <label>Budget (₹) <input name="budget" type="number" min="100" required></label>
+        <label>Date needed <input name="job_date" type="date" required></label>
+        <label class="full">Details <textarea name="details" rows="4" placeholder="Describe the work, tools needed, timing…"></textarea></label>
+      </div>
+      <div class="form-error"></div>
+      <div class="form-actions">
+        <button class="btn" type="submit">Post Job</button>
+        <a href="/dashboard" class="btn ghost">Cancel</a>
+      </div>
+    </form>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/post_job.js"></script>
+</body>
+</html>

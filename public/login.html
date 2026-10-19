@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Log in — 9 to 5</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <main class="container auth-wrap">
+    <div class="card form-card">
+      <h1>Welcome back</h1>
+      <p class="muted">Log in to continue.</p>
+      <div class="role-toggle" role="tablist">
+        <button type="button" data-role="poster" class="on">I hire workers</button>
+        <button type="button" data-role="labourer">I'm a labourer</button>
+      </div>
+      <form id="loginForm" data-role="poster">
+        <label>Email <input name="email" type="email" required autocomplete="email"></label>
+        <label>Password <input name="password" type="password" required autocomplete="current-password"></label>
+        <div class="form-error"></div>
+        <button class="btn block" type="submit">Log in</button>
+      </form>
+    </div>
+    <p class="auth-foot">New here? <a href="/signup" id="signupLink">Create an account</a></p>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/auth.js"></script>
+</body>
+</html>

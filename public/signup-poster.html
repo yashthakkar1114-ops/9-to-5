@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sign up as Job Poster — 9 to 5</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <main class="container auth-wrap">
+    <div class="card form-card">
+      <h1>Create a Job Poster account</h1>
+      <p class="muted">Hire trusted workers for your home or business.</p>
+      <form id="signupForm" data-role="poster" style="margin-top:16px">
+        <label>Full name <input name="name" required minlength="2" autocomplete="name"></label>
+        <label>Email <input name="email" type="email" required autocomplete="email"></label>
+        <label>Phone number <input name="phone" type="tel" required pattern="\+?[0-9 \-]{10,15}" placeholder="10-digit mobile number" autocomplete="tel"></label>
+        <label>Password <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters"></label>
+        <div class="form-error"></div>
+        <button class="btn block" type="submit">Create account</button>
+      </form>
+    </div>
+    <p class="auth-foot">Are you a labourer? <a href="/signup-labourer">Sign up here</a> · <a href="/login">Log in</a></p>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/auth.js"></script>
+</body>
+</html>

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Admin Panel — 9 to 5</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <main class="container">
+    <h1 class="page-title">Admin Panel</h1>
+    <p class="page-sub">Verify labourers, manage users and keep an eye on jobs and bookings.</p>
+    <div class="stats" id="stats"></div>
+    <nav class="tabs" id="tabs" aria-label="Admin sections">
+      <button type="button" data-tab="users" class="on">Users</button>
+      <button type="button" data-tab="jobs">Jobs</button>
+      <button type="button" data-tab="bookings">Bookings</button>
+    </nav>
+    <div id="tabBody" aria-live="polite"></div>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/admin.js"></script>
+</body>
+</html>
