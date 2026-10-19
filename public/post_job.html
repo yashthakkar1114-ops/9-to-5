@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Post a Job — 9 to 5</title>
+  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/"><img src="/assets/logo.svg" alt="" width="32" height="32"><span>9 to 5</span></a></header>
   <main class="container auth-wrap wide">
     <h1 class="page-title" id="formTitle">Post a Job</h1>
     <p class="page-sub">Labourers in your area will see it and apply.</p>
@@ -15,7 +16,9 @@
       <div class="form-grid">
         <label class="full">Job title <input name="title" required minlength="3" placeholder="e.g. Fix bathroom leak"></label>
         <label>Trade needed <select name="trade" required id="tradeSelect"></select></label>
-        <label>Location <input name="location" required placeholder="e.g. Bandra West"></label>
+        <label>Location <select name="location" required id="areaSelect"><option value="">Loading locations…</option></select></label>
+        <label class="full">Full address <input name="address" required minlength="5" maxlength="255" placeholder="Flat / building, street, area, pincode">
+          <small class="muted">Only shared with the labourer you hire, as a map pin.</small></label>
         <label>Budget (₹) <input name="budget" type="number" min="100" required></label>
         <label>Date needed <input name="job_date" type="date" required></label>
         <label class="full">Details <textarea name="details" rows="4" placeholder="Describe the work, tools needed, timing…"></textarea></label>

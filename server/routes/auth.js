@@ -20,13 +20,13 @@ router.post('/register', authLimiter, async (req, res) => {
   const name = v.str(b.name, 'Name', { min: 2, max: 100 });
   const email = v.email(b.email);
   const phone = v.phone(b.phone);
-  const password = v.str(b.password, 'Password', { min: 6, max: 72 });
+  const password = v.password(b.password);
 
   let profile;
   if (b.role === 'labourer') {
     profile = {
-      trade: v.trade(b.trade),
-      area: v.str(b.area, 'Area', { max: 100 }),
+      trades: v.trades(b.trades),
+      area: await v.area(b.area),
       daily_rate: v.int(b.daily_rate, 'Daily rate', { min: 100, max: 100000 }),
       skills: v.str(b.skills, 'Skills', { optional: true }),
       experience: v.int(b.experience || 0, 'Experience', { max: 60 }),
@@ -91,7 +91,7 @@ router.get('/me', (req, res) => {
 // PATCH /api/auth/password  { current, next }
 router.patch('/password', requireRole(), async (req, res) => {
   const current = v.str(req.body.current, 'Current password');
-  const next = v.str(req.body.next, 'New password', { min: 6, max: 72 });
+  const next = v.password(req.body.next, 'New password');
   const [user] = await query('SELECT password_hash FROM users WHERE id = ?', [req.user.id]);
   if (!(await bcrypt.compare(current, user.password_hash))) {
     return res.status(400).json({ error: 'Current password is wrong.' });

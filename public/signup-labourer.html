@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign up as Labourer — 9 to 5</title>
+  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/"><img src="/assets/logo.svg" alt="" width="32" height="32"><span>9 to 5</span></a></header>
   <main class="container auth-wrap wide">
     <div class="card form-card">
       <h1>Create a Labourer account</h1>
@@ -17,12 +18,15 @@
           <label class="full">Full name <input name="name" required minlength="2" autocomplete="name"></label>
           <label>Email <input name="email" type="email" required autocomplete="email"></label>
           <label>Phone number <input name="phone" type="tel" required pattern="\+?[0-9 \-]{10,15}" placeholder="10-digit mobile number" autocomplete="tel"></label>
-          <label>Trade <select name="trade" required id="tradeSelect"></select></label>
-          <label>Area you work in <input name="area" required placeholder="e.g. Andheri"></label>
+          <fieldset class="full field-group">
+            <legend>Trades you do <span class="muted">(pick all that apply)</span></legend>
+            <div id="tradeChecks"></div>
+          </fieldset>
+          <label>Area you work in <select name="area" required id="areaSelect"><option value="">Loading areas…</option></select></label>
           <label>Daily rate (₹) <input name="daily_rate" type="number" min="100" required placeholder="e.g. 600"></label>
           <label>Experience (years) <input name="experience" type="number" min="0" max="60" value="0"></label>
           <label class="full">Skills <input name="skills" placeholder="e.g. Leak repair, pipe fitting, bathroom fittings"></label>
-          <label class="full">Password <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters"></label>
+          <label class="full">Password <input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="Create a strong password"></label>
         </div>
         <div class="form-error"></div>
         <button class="btn block" type="submit">Create account</button>

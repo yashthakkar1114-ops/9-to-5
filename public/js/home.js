@@ -1,5 +1,6 @@
-// Home page: search labourers, view profile, book directly.
+// Home page: search labourers, view profile, book directly. For job posters and visitors only.
 (async () => {
+  if ((await getMe())?.role === 'labourer') return location.replace('/jobs');
   $('#tradeFilter').insertAdjacentHTML('beforeend', tradeOptions());
   const params = new URLSearchParams(location.search);
   for (const [k, val] of params) if ($(`#searchForm [name=${k}]`)) $(`#searchForm [name=${k}]`).value = val;
@@ -20,7 +21,7 @@
             <div class="avatar">${esc(initials(l.name))}</div>
             <div>
               <h3 class="name" style="margin:0">${esc(l.name)}</h3>
-              <span class="badge">${esc(l.trade)}</span>
+              ${tradeBadges(l.trades)}
               ${l.verified ? '<span class="verified">✔ Verified</span>' : ''}
             </div>
           </div>
@@ -60,7 +61,7 @@
       <div style="display:flex;gap:16px;align-items:center">
         <div class="avatar lg">${esc(initials(l.name))}</div>
         <div>
-          <span class="badge">${esc(l.trade)}</span> ${l.verified ? '<span class="verified">✔ Verified by 9 to 5</span>' : ''}
+          ${tradeBadges(l.trades)} ${l.verified ? '<span class="verified">✔ Verified by 9 to 5</span>' : ''}
           <div class="muted" style="margin-top:6px">📍 ${esc(l.area)} · ${rupees(l.daily_rate)}/day · ${l.experience} years experience</div>
           <div style="margin-top:4px">${stars(l.rating_avg, l.rating_count)}</div>
         </div>
@@ -76,14 +77,16 @@
 
   async function book(l) {
     const me = await getMe();
-    if (!me) return (location.href = '/login?role=poster&next=/');
+    if (!me) return (location.href = '/login?role=poster&next=/find');
     if (me.role !== 'poster') return toast('Only Job Poster accounts can book labourers.', 'error');
     const body = openModal(`Book ${l.name}`, `
-      <p class="muted">${esc(l.trade)} · ${rupees(l.daily_rate)}/day. ${esc(l.name.split(' ')[0])} will confirm the booking.</p>
+      <p class="muted">${esc(splitTrades(l.trades).join(', '))} · ${rupees(l.daily_rate)}/day. ${esc(l.name.split(' ')[0])} will confirm the booking.</p>
       <form class="form-card" style="padding:0">
         <label>Date <input name="booking_date" type="date" required min="${today()}"></label>
         <label>Amount offered (₹) <input name="amount" type="number" min="100" required value="${l.daily_rate}"></label>
-        <label>Work description <textarea name="note" rows="3" maxlength="255" placeholder="What needs to be done, address area, timing…"></textarea></label>
+        <label>Work address <input name="address" required minlength="5" maxlength="255" placeholder="Flat / building, street, area"></label>
+        <label>Work description <textarea name="note" rows="3" maxlength="255" placeholder="What needs to be done, timing…"></textarea></label>
+        <p class="muted" style="margin-top:-6px;font-size:13px">The address is shared with ${esc(l.name.split(' ')[0])} only after they accept.</p>
         <div class="form-error"></div>
         <button class="btn" type="submit">Send booking request</button>
       </form>`);

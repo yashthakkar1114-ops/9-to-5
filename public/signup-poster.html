@@ -4,10 +4,11 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Sign up as Job Poster — 9 to 5</title>
+  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
 <body>
-  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/"><img src="/assets/logo.svg" alt="" width="32" height="32"><span>9 to 5</span></a></header>
   <main class="container auth-wrap">
     <div class="card form-card">
       <h1>Create a Job Poster account</h1>
@@ -16,7 +17,7 @@
         <label>Full name <input name="name" required minlength="2" autocomplete="name"></label>
         <label>Email <input name="email" type="email" required autocomplete="email"></label>
         <label>Phone number <input name="phone" type="tel" required pattern="\+?[0-9 \-]{10,15}" placeholder="10-digit mobile number" autocomplete="tel"></label>
-        <label>Password <input name="password" type="password" required minlength="6" autocomplete="new-password" placeholder="At least 6 characters"></label>
+        <label>Password <input name="password" type="password" required minlength="8" maxlength="72" autocomplete="new-password" placeholder="Create a strong password"></label>
         <div class="form-error"></div>
         <button class="btn block" type="submit">Create account</button>
       </form>

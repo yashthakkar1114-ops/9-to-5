@@ -32,9 +32,16 @@
 
   const signupForm = $('#signupForm');
   if (signupForm) {
-    const trade = $('#tradeSelect');
-    if (trade) trade.innerHTML = '<option value="">Choose your trade</option>' + tradeOptions();
+    passwordMeter(signupForm.password);
+    const isLabourer = signupForm.dataset.role === 'labourer';
+    if (isLabourer) {
+      $('#tradeChecks').innerHTML = tradeChecks();
+      areaOptions()
+        .then(html => ($('#areaSelect').innerHTML = html))
+        .catch(() => ($('#areaSelect').innerHTML = '<option value="">Could not load areas, please refresh</option>'));
+    }
     handleForm(signupForm, async data => {
+      if (isLabourer && !data.trades) throw new Error('Pick at least one trade.');
       const { user } = await api('/auth/register', { method: 'POST', body: { ...data, role: signupForm.dataset.role } });
       sessionStorage.setItem('welcome', '1');
       goNext(user.role);

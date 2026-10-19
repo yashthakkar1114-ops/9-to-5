@@ -41,7 +41,7 @@
         <td><strong>${esc(u.name)}</strong></td>
         <td>${ROLE_LABEL[u.role]}</td>
         <td>${esc(u.email)}<br><span class="muted">${esc(u.phone)}</span></td>
-        <td>${u.role === 'labourer' ? `${esc(u.trade)} · ${esc(u.area)}<br>${u.verified ? '<span class="verified">✔ Verified</span>' : '<span class="muted">Not verified</span>'}` : '—'}</td>
+        <td>${u.role === 'labourer' ? `${esc(splitTrades(u.trades).join(', '))} · ${esc(u.area)}<br>${u.verified ? '<span class="verified">✔ Verified</span>' : '<span class="muted">Not verified</span>'}` : '—'}</td>
         <td>${fmtDate(u.created_at)}</td>
         <td>${pill(u.status)}</td>
         <td><div class="actions">
@@ -69,16 +69,41 @@
   async function renderBookings() {
     const { bookings } = await api('/admin/bookings');
     body.innerHTML = `<div class="card table-wrap"><table class="data"><thead><tr>
-        <th>#</th><th>Job Poster</th><th>Labourer</th><th>Date</th><th>Amount</th><th>Status</th><th>Created</th>
+        <th>#</th><th>Job Poster</th><th>Labourer</th><th>Date</th><th>Amount</th><th>Status</th><th>Payment</th><th>Created</th>
       </tr></thead><tbody>${bookings.map(b => `
         <tr>
           <td>${b.id}</td><td>${esc(b.poster_name)}</td><td>${esc(b.labourer_name)}</td>
-          <td>${fmtDate(b.booking_date)}</td><td>${rupees(b.amount)}</td><td>${pill(b.status)}</td><td>${fmtDate(b.created_at)}</td>
-        </tr>`).join('') || '<tr><td colspan="7" class="empty">No bookings yet.</td></tr>'}</tbody></table></div>`;
+          <td>${fmtDate(b.booking_date)}</td><td>${rupees(b.amount)}</td><td>${pill(b.status)}</td>
+          <td>${b.paid_at ? `<span class="paid">✔ Paid</span>` : b.status === 'completed' ? '<span class="muted">Unpaid</span>' : '—'}</td>
+          <td>${fmtDate(b.created_at)}</td>
+        </tr>`).join('') || '<tr><td colspan="8" class="empty">No bookings yet.</td></tr>'}</tbody></table></div>`;
+  }
+
+  // ---------- Areas (the dropdown labourers pick from at signup) ----------
+  async function renderAreas() {
+    const { areas } = await api('/admin/areas');
+    body.innerHTML = `
+      <form class="toolbar" id="areaForm">
+        <input name="name" required minlength="2" maxlength="100" placeholder="New area, e.g. Santacruz">
+        <button class="btn small" type="submit">Add area</button>
+      </form>
+      <div class="card table-wrap"><table class="data"><thead><tr>
+        <th>Area</th><th>Labourers</th><th>Added</th><th></th>
+      </tr></thead><tbody>${areas.map(a => `
+        <tr>
+          <td><strong>${esc(a.name)}</strong></td><td>${a.labourer_count}</td><td>${fmtDate(a.created_at)}</td>
+          <td>${a.labourer_count ? '<span class="muted">In use</span>'
+            : `<button class="btn small danger" data-area-delete="${a.id}" type="button">Remove</button>`}</td>
+        </tr>`).join('') || '<tr><td colspan="4" class="empty">No areas yet. Labourers cannot sign up until you add one.</td></tr>'}</tbody></table></div>`;
+    handleForm($('#areaForm'), async data => {
+      await api('/admin/areas', { method: 'POST', body: data });
+      toast(`${data.name.trim()} added.`);
+      await renderAreas();
+    });
   }
 
   body.addEventListener('click', async e => {
-    const btn = e.target.closest('[data-verify], [data-block], [data-delete]');
+    const btn = e.target.closest('[data-verify], [data-block], [data-delete], [data-area-delete]');
     if (!btn) return;
     try {
       if (btn.dataset.verify) {
@@ -96,6 +121,11 @@
         await api('/admin/jobs/' + btn.dataset.delete, { method: 'DELETE' });
         toast('Job removed.');
         await renderJobs();
+      } else if (btn.dataset.areaDelete) {
+        if (!confirm('Remove this area from the signup list?')) return;
+        await api('/admin/areas/' + btn.dataset.areaDelete, { method: 'DELETE' });
+        toast('Area removed.');
+        await renderAreas();
       }
       loadStats();
     } catch (err) {
@@ -103,7 +133,7 @@
     }
   });
 
-  const TABS = { users: renderUsersShell, jobs: renderJobs, bookings: renderBookings };
+  const TABS = { users: renderUsersShell, jobs: renderJobs, bookings: renderBookings, areas: renderAreas };
   async function showTab(key) {
     currentTab = key;
     $$('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === key));

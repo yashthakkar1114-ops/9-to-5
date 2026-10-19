@@ -6,6 +6,8 @@ const pool = mysql.createPool({
   user: process.env.DB_USER,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_NAME,
+  // Most hosted MySQL providers require an encrypted connection.
+  ssl: process.env.DB_SSL === 'true' ? { ca: process.env.DB_SSL_CA, rejectUnauthorized: true } : undefined,
   connectionLimit: 10,
   dateStrings: true,
 });

@@ -1,12 +1,22 @@
-// Browse Jobs page: anyone can browse; labourers can apply.
+// Browse Jobs page: anyone can browse; labourers only see (and apply to) jobs for their own trades.
 (async () => {
-  $('#tradeFilter').insertAdjacentHTML('beforeend', tradeOptions());
   const me = await getMe();
   let jobs = [];
 
+  if (me?.role === 'labourer') {
+    const { profile } = await api('/labourers/me');
+    const mine = splitTrades(profile.trades);
+    $('#tradeFilter').innerHTML = `<option value="">All my trades</option>${tradeOptions('', mine)}`;
+    $('#jobSearch').insertAdjacentHTML('afterend', `<p class="trade-note">Showing jobs for your trades:
+      ${tradeBadges(profile.trades)} <a href="/dashboard?tab=profile">Edit trades</a></p>`);
+  } else {
+    $('#tradeFilter').insertAdjacentHTML('beforeend', tradeOptions());
+  }
+
   function applyButton(j) {
     if (me?.role === 'poster' || me?.role === 'admin') return '';
-    if (j.has_applied) return '<span class="pill pill-accepted">Applied ✓</span>';
+    if (j.my_application === 'rejected') return '<span class="pill pill-rejected">Not selected</span>';
+    if (j.my_application) return '<span class="pill pill-accepted">Applied ✓</span>';
     return `<button class="btn small" data-apply="${j.id}" type="button">Apply</button>`;
   }
 
@@ -30,7 +40,7 @@
           <div class="price">${rupees(j.budget)}</div>
           ${applyButton(j)}
         </div>
-      </div>`).join('') || '<div class="card empty">No open jobs match your search.</div>';
+      </div>`).join('') || `<div class="card empty">No open jobs match your search${me?.role === 'labourer' ? ' and trades' : ''}.</div>`;
   }
 
   function apply(job) {

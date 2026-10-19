@@ -2,6 +2,7 @@
 (async () => {
   const me = await requireLogin('poster', 'labourer');
   const body = $('#tabBody');
+  const params = new URLSearchParams(location.search);
 
   $('#hello').textContent = `Hi, ${me.name.split(' ')[0]} 👋`;
   $('#helloSub').textContent = me.role === 'poster'
@@ -14,52 +15,121 @@
   sessionStorage.removeItem('flash');
 
   // ---------- Bookings (both roles) ----------
-  function bookingActions(b) {
-    if (me.role === 'labourer' && b.status === 'pending') {
-      return `<button class="btn small success" data-act="accept" data-id="${b.id}" type="button">Accept</button>
-              <button class="btn small ghost" data-act="reject" data-id="${b.id}" type="button">Reject</button>`;
-    }
-    if (me.role === 'poster') {
-      let html = '';
-      if (b.status === 'accepted') html += `<button class="btn small success" data-act="complete" data-id="${b.id}" type="button">Mark done</button>`;
-      if (['pending', 'accepted'].includes(b.status)) html += `<button class="btn small ghost" data-act="cancel" data-id="${b.id}" type="button">Cancel</button>`;
-      if (b.status === 'completed' && !b.rating) html += `<button class="btn small" data-review="${b.id}" type="button">Rate</button>`;
-      return html;
-    }
-    return '';
+  const STEPS = [['accepted', 'Accepted'], ['started', 'Started'], ['in_progress', 'In progress'], ['completed', 'Completed']];
+
+  // Progress bar both sides see: the labourer moves it forward, the poster watches it.
+  function tracker(status) {
+    const at = STEPS.findIndex(([s]) => s === status);
+    if (at < 0) return '';
+    return `<ol class="tracker" aria-label="Work progress">${STEPS.map(([s, label], i) =>
+      `<li class="${i <= at ? 'done' : ''}" ${i === at ? 'aria-current="step"' : ''}>${label}</li>`).join('')}</ol>`;
   }
 
-  async function renderBookings() {
-    const { bookings } = await api('/bookings');
+  function addressLine(b) {
+    if (b.address) {
+      return `<span>📍 ${esc(b.address)} · <a href="${mapLink(b.address)}" target="_blank" rel="noopener">Open map pin ↗</a></span>`;
+    }
+    return me.role === 'labourer' && b.status === 'pending' ? '<span>📍 Address shared once you accept</span>' : '';
+  }
+
+  function paymentLine(b) {
+    if (b.status !== 'completed') return '';
+    if (b.paid_at) {
+      return `<span class="paid">✔ ${me.role === 'poster' ? 'Paid' : 'Payment received'} · ${esc(b.payment_ref)}</span>`;
+    }
+    return me.role === 'poster'
+      ? `<a class="btn small success" href="/pay?booking=${b.id}">Pay ${rupees(b.amount)}</a>`
+      : '<span class="pill pill-pending">Awaiting payment</span>';
+  }
+
+  function bookingActions(b) {
+    if (me.role === 'labourer') {
+      if (b.status === 'pending') {
+        return `<button class="btn small success" data-act="accept" data-id="${b.id}" type="button">Accept</button>
+                <button class="btn small ghost" data-act="reject" data-id="${b.id}" type="button">Reject</button>`;
+      }
+      if (b.status === 'accepted') return `<button class="btn small" data-act="start" data-id="${b.id}" type="button">▶ Start job</button>`;
+      if (b.status === 'started') return `<button class="btn small" data-act="progress" data-id="${b.id}" type="button">Mark in progress</button>`;
+      if (b.status === 'in_progress') return `<button class="btn small success" data-act="complete" data-id="${b.id}" type="button">✔ Mark completed</button>`;
+      return '';
+    }
+    let html = '';
+    if (['accepted', 'started', 'in_progress'].includes(b.status)) html += `<button class="btn small success" data-act="complete" data-id="${b.id}" type="button">Mark done</button>`;
+    if (['pending', 'accepted'].includes(b.status)) html += `<button class="btn small ghost" data-act="cancel" data-id="${b.id}" type="button">Cancel</button>`;
+    if (b.status === 'completed' && !b.rating) html += `<button class="btn small ghost" data-review="${b.id}" type="button">Rate</button>`;
+    return html;
+  }
+
+  // Once a booking is accepted both sides get a (demo) map: the labourer gets directions,
+  // the poster sees the labourer on the way with an ETA until the job starts.
+  const ACTIVE = ['accepted', 'started', 'in_progress'];
+  function mapSection(b) {
+    if (!ACTIVE.includes(b.status) || !b.address) return '';
+    return `${mockMap({ id: b.id, address: b.address, viewer: me.role, status: b.status, otherName: b.other_name })}
+      <div class="booking-help">
+        <a href="#" data-support="safety">🛡️ Safety centre</a>
+        <a href="#" data-support="report" data-ctx="${b.id}">⚠️ Report a problem</a>
+        <a href="#" data-support="chat">💬 Contact support</a>
+      </div>`;
+  }
+
+  let bookingsShown = '';
+  function drawBookings(bookings) {
+    bookingsShown = JSON.stringify(bookings);
     const who = me.role === 'poster' ? 'Labourer' : 'Hired by';
     body.innerHTML = bookings.map(b => `
-      <div class="card job-card fade-in" style="margin-bottom:10px">
+      <div class="card job-card fade-in ${ACTIVE.includes(b.status) && b.address ? 'has-map' : ''}" style="margin-bottom:10px">
         <div>
-          <h3>${esc(b.note || (b.trade + ' work'))}</h3>
+          <h3>${esc(b.note || (splitTrades(b.trade).join(', ') + ' work'))}</h3>
           <div class="meta">
             <span>${who}: <strong>${esc(b.other_name)}</strong></span>
-            ${b.trade ? `<span>🛠 ${esc(b.trade)}</span>` : ''}
+            ${b.trade ? `<span>🛠 ${esc(splitTrades(b.trade).join(', '))}</span>` : ''}
             <span>📅 ${fmtDate(b.booking_date)}</span>
             ${b.other_phone ? `<span>📞 <a href="tel:${esc(b.other_phone)}">${esc(b.other_phone)}</a></span>` : ''}
             ${b.job_id ? '<span>via job post</span>' : '<span>direct booking</span>'}
           </div>
+          <div class="meta" style="margin-top:4px">${addressLine(b)}</div>
+          ${tracker(b.status)}
           ${b.rating ? `<p class="details"><span class="stars">${'★'.repeat(b.rating)}</span> ${esc(b.comment)}</p>` : ''}
         </div>
         <div class="side">
           <div class="price">${rupees(b.amount)}</div>
           ${pill(b.status)}
+          ${paymentLine(b)}
           <div class="actions">${bookingActions(b)}</div>
         </div>
+        ${mapSection(b)}
       </div>`).join('') || `<div class="card empty">No bookings yet. ${me.role === 'poster'
-        ? '<a href="/">Find a labourer</a> or <a href="/post_job">post a job</a>.'
+        ? '<a href="/find">Find a labourer</a> or <a href="/post_job">post a job</a>.'
         : 'Keep your profile up to date and <a href="/jobs">apply to jobs</a>.'}</div>`;
-    return bookings;
+    tickMaps();
   }
+
+  async function renderBookings() {
+    const { bookings } = await api('/bookings');
+    drawBookings(bookings);
+  }
+
+  // Keep the other side's progress updates in sync while the Bookings tab is open.
+  setInterval(async () => {
+    const modalOpen = $('#appModal') && !$('#appModal').classList.contains('hidden');
+    if (currentTab !== 'bookings' || document.hidden || modalOpen) return;
+    try {
+      const { bookings } = await api('/bookings');
+      if (JSON.stringify(bookings) !== bookingsShown) drawBookings(bookings);
+    } catch {}
+  }, 15000);
 
   const CONFIRM = {
     cancel: 'Cancel this booking?',
     reject: 'Reject this booking request?',
-    complete: 'Mark this work as completed?',
+    complete: me.role === 'poster'
+      ? 'Mark this work as completed? You will be taken to payment.'
+      : 'Mark this work as completed? The job poster will be asked to pay.',
+  };
+  const DONE = {
+    accept: 'Booking accepted.', reject: 'Booking rejected.', cancel: 'Booking cancelled.',
+    start: 'Job started. The poster can see it now.', progress: 'Marked as in progress.', complete: 'Marked as completed.',
   };
 
   body.addEventListener('click', async e => {
@@ -68,8 +138,8 @@
       if (CONFIRM[act.dataset.act] && !confirm(CONFIRM[act.dataset.act])) return;
       try {
         await api('/bookings/' + act.dataset.id, { method: 'PATCH', body: { action: act.dataset.act } });
-        toast({ accept: 'Booking accepted.', reject: 'Booking rejected.', cancel: 'Booking cancelled.', complete: 'Marked as completed.' }[act.dataset.act]);
-        if (act.dataset.act === 'complete') reviewModal(act.dataset.id);
+        if (act.dataset.act === 'complete' && me.role === 'poster') return (location.href = '/pay?booking=' + act.dataset.id);
+        toast(DONE[act.dataset.act]);
         showTab(currentTab);
       } catch (err) {
         toast(err.message, 'error');
@@ -115,7 +185,7 @@
           <h3>${esc(j.title)}</h3>
           <div class="meta">
             <span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span><span>📅 ${fmtDate(j.job_date)}</span>
-            ${j.hired_name ? `<span>Hired: <strong>${esc(j.hired_name)}</strong></span>` : ''}
+            ${j.hired_name ? `<span>Hired: <strong>${esc(j.hired_name)}</strong> ${j.work_status ? pill(j.work_status) : ''}</span>` : ''}
           </div>
         </div>
         <div class="side">
@@ -138,23 +208,36 @@
         <div class="avatar">${esc(initials(a.name))}</div>
         <div style="flex:1">
           <strong>${esc(a.name)}</strong> ${a.verified ? '<span class="verified">✔ Verified</span>' : ''}
-          <div class="muted">${esc(a.trade)} · ${esc(a.area)} · ${rupees(a.daily_rate)}/day · ${a.experience} yrs · ${stars(a.rating_avg, a.rating_count)}</div>
+          <div class="muted">${esc(splitTrades(a.trades).join(', '))} · ${esc(a.area)} · ${rupees(a.daily_rate)}/day · ${a.experience} yrs · ${stars(a.rating_avg, a.rating_count)}</div>
           ${a.message ? `<div>“${esc(a.message)}”</div>` : ''}
         </div>
-        ${a.status === 'pending' ? `<button class="btn small" data-hire="${a.id}" type="button">Hire</button>` : pill(a.status)}
+        ${a.status === 'pending'
+          ? `<div class="actions"><button class="btn small success" data-hire="${a.id}" type="button">Hire</button>
+             <button class="btn small ghost" data-reject="${a.id}" type="button">Reject</button></div>`
+          : pill(a.status)}
       </div>`).join('') || '<p class="muted">No one has applied yet. Check back soon.</p>');
-    m.addEventListener('click', async e => {
+    // onclick (not addEventListener): the modal body is reused, so listeners would pile up across opens.
+    m.onclick = async e => {
       const h = e.target.closest('[data-hire]');
-      if (!h || !confirm('Hire this labourer? Other applicants will be declined.')) return;
+      const r = e.target.closest('[data-reject]');
+      if (!h && !r) return;
+      if (h && !confirm('Hire this labourer? Other applicants will be declined.')) return;
+      if (r && !confirm('Reject this applicant? They will see that they were not selected.')) return;
       try {
-        await api(`/jobs/${jobId}/hire`, { method: 'POST', body: { application_id: Number(h.dataset.hire) } });
-        closeModal();
-        toast('Labourer hired! You can now see their phone number under Bookings.');
+        if (h) {
+          await api(`/jobs/${jobId}/hire`, { method: 'POST', body: { application_id: Number(h.dataset.hire) } });
+          closeModal();
+          toast('Labourer hired! You can now see their phone number under Bookings.');
+        } else {
+          await api(`/jobs/${jobId}/applications/${r.dataset.reject}/reject`, { method: 'POST' });
+          toast('Applicant rejected.');
+          await applicantsModal(jobId);
+        }
         showTab('jobs');
       } catch (err) {
         toast(err.message, 'error');
       }
-    });
+    };
   }
 
   body.addEventListener('click', async e => {
@@ -184,14 +267,18 @@
           <div class="meta"><span>🛠 ${esc(a.trade)}</span><span>📍 ${esc(a.location)}</span>
             <span>📅 ${fmtDate(a.job_date)}</span><span>👤 ${esc(a.poster_name)}</span></div>
           ${a.message ? `<p class="details">Your message: “${esc(a.message)}”</p>` : ''}
+          ${a.status === 'rejected' ? '<p class="details error">The poster did not select you for this job.</p>' : ''}
+          ${a.status === 'accepted' ? '<p class="details success">You were hired! See the Bookings tab for details.</p>' : ''}
         </div>
-        <div class="side"><div class="price">${rupees(a.budget)}</div>${pill(a.status)}</div>
+        <div class="side"><div class="price">${rupees(a.budget)}</div>${a.status === 'rejected'
+          ? '<span class="pill pill-rejected">Not selected</span>' : pill(a.status)}</div>
       </div>`).join('') || '<div class="card empty">You have not applied to any jobs yet. <a href="/jobs">Browse open jobs</a>.</div>';
   }
 
   // ---------- Labourer: Profile ----------
   async function renderProfile() {
     const { profile: p } = await api('/labourers/me');
+    const areas = await areaOptions(p.area);
     body.innerHTML = `
       <form class="card form-card" id="profileForm" style="max-width:680px">
         <h3 style="margin-top:0">Your public profile</h3>
@@ -201,8 +288,11 @@
         <div class="form-grid">
           <label>Full name <input name="name" required minlength="2" value="${esc(p.name)}"></label>
           <label>Phone <input name="phone" type="tel" required value="${esc(p.phone)}"></label>
-          <label>Trade <select name="trade" required>${tradeOptions(p.trade)}</select></label>
-          <label>Area <input name="area" required value="${esc(p.area)}"></label>
+          <fieldset class="full field-group">
+            <legend>Trades you do <span class="muted">(you'll see jobs for all of these)</span></legend>
+            ${tradeChecks(p.trades)}
+          </fieldset>
+          <label>Area <select name="area" required>${areas}</select></label>
           <label>Daily rate (₹) <input name="daily_rate" type="number" min="100" required value="${p.daily_rate}"></label>
           <label>Experience (years) <input name="experience" type="number" min="0" max="60" value="${p.experience}"></label>
           <label class="full">Skills <input name="skills" value="${esc(p.skills)}"></label>
@@ -212,6 +302,7 @@
         <button class="btn" type="submit">Save profile</button>
       </form>`;
     handleForm($('#profileForm'), async data => {
+      if (!data.trades) throw new Error('Pick at least one trade.');
       await api('/labourers/me', { method: 'PUT', body: { ...data, available: data.available === 'on' } });
       toast('Profile saved.');
     });
@@ -224,11 +315,12 @@
         <h3 style="margin-top:0">Change password</h3>
         <p class="muted" style="margin-top:-6px">Logged in as ${esc(me.email)}</p>
         <label>Current password <input name="current" type="password" required autocomplete="current-password"></label>
-        <label>New password <input name="next" type="password" required minlength="6" autocomplete="new-password"></label>
+        <label>New password <input name="next" type="password" required minlength="8" maxlength="72" autocomplete="new-password"></label>
         <div class="form-error"></div>
         <button class="btn" type="submit">Update password</button>
       </form>`;
     const form = $('#pwForm');
+    passwordMeter(form.next);
     handleForm(form, async data => {
       await api('/auth/password', { method: 'PATCH', body: data });
       form.reset();
@@ -241,7 +333,7 @@
     ? { jobs: ['My Jobs', renderMyJobs], bookings: ['Bookings', renderBookings], account: ['Account', renderAccount] }
     : { bookings: ['Bookings', renderBookings], applications: ['My Applications', renderApplications],
         profile: ['My Profile', renderProfile], account: ['Account', renderAccount] };
-  let currentTab = Object.keys(TABS)[0];
+  let currentTab = TABS[params.get('tab')] ? params.get('tab') : Object.keys(TABS)[0];
 
   $('#tabs').innerHTML = Object.entries(TABS)
     .map(([key, [label]]) => `<button type="button" data-tab="${key}">${label}</button>`).join('');
@@ -264,5 +356,8 @@
       if (n) $('#tabs [data-tab=bookings]').insertAdjacentHTML('beforeend', `<span class="count">${n}</span>`);
     }).catch(() => {});
   }
-  showTab(currentTab);
+  await showTab(currentTab);
+  // /dashboard?tab=bookings&rate=<id> comes from the payment receipt.
+  if (me.role === 'poster' && params.get('rate')) reviewModal(params.get('rate'));
+  if (params.toString()) history.replaceState(null, '', '/dashboard');
 })();

@@ -3,37 +3,105 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>9 to 5 — Hire Labourers</title>
+  <title>9 to 5 — Hire trusted local labourers</title>
+  <meta name="description" content="Hire verified plumbers, electricians, carpenters, painters and movers near you, or find daily work in your area.">
+  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/css/styles.css">
 </head>
-<body>
-  <header id="siteHeader" class="site-header"><a class="brand" href="/">9 to 5</a></header>
-  <main class="container">
-    <section class="hero" aria-labelledby="hero-title">
-      <h1 id="hero-title">Find trusted labourers nearby — fast</h1>
-      <p>Search skilled daily-wage workers — plumbing, carpentry, movers and more.</p>
-      <form class="search-bar" id="searchForm" role="search">
-        <input type="search" name="q" placeholder="Search name or skill (e.g. leak repair)" aria-label="Search">
-        <select name="trade" id="tradeFilter" aria-label="Trade"><option value="">All trades</option></select>
-        <input type="search" name="area" placeholder="Area (e.g. Andheri)" aria-label="Area">
-        <button class="btn" type="submit">Search</button>
-      </form>
-    </section>
+<body class="landing">
+  <header id="siteHeader" class="site-header"><a class="brand" href="/"><img src="/assets/logo.svg" alt="" width="32" height="32"><span>9 to 5</span></a></header>
 
-    <section aria-labelledby="workers-heading">
-      <h2 id="workers-heading">Available Labourers</h2>
-      <div id="workersGrid" class="grid" aria-live="polite"></div>
-    </section>
-
-    <section aria-labelledby="jobs-heading">
-      <div class="section-head">
-        <h2 id="jobs-heading">Recent Job Posts</h2>
-        <a href="/jobs">See all jobs →</a>
+  <section class="lp-hero">
+    <div class="lp-wrap lp-hero-grid">
+      <div>
+        <span class="lp-eyebrow">Mumbai’s local workforce, on demand</span>
+        <h1>Skilled hands for every job, <span class="lp-grad">from 9 to 5.</span></h1>
+        <p class="lp-lead">Book verified plumbers, electricians, carpenters, painters and movers near you, and watch them arrive.
+          Or join as a labourer and get steady work in your own area.</p>
+        <div class="lp-cta" id="heroCta">
+          <a class="btn lp-btn" href="/find">Hire a labourer</a>
+          <a class="btn ghost lp-btn" href="/signup-labourer">Find work</a>
+        </div>
+        <ul class="lp-trust">
+          <li>✔ Verified profiles</li>
+          <li>✔ Pay after the work is done</li>
+          <li>✔ Live arrival tracking</li>
+        </ul>
       </div>
-      <div id="jobsList" class="list" aria-live="polite"></div>
-    </section>
-  </main>
+      <div class="lp-visual" aria-hidden="true">
+        <div class="lp-float lp-float-a"><span>🪪</span> Verified labourer</div>
+        <div class="card lp-demo-card" id="heroDemo"></div>
+        <div class="lp-float lp-float-b">✔ Booking accepted</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-stats lp-wrap" aria-label="9 to 5 in numbers">
+    <div><b id="statLabourers">–</b><span>labourers ready to work</span></div>
+    <div><b id="statJobs">–</b><span>open jobs right now</span></div>
+    <div><b id="statAreas">–</b><span>areas covered</span></div>
+    <div><b>8</b><span>trades to choose from</span></div>
+  </section>
+
+  <section class="lp-section lp-wrap" aria-labelledby="tradesTitle">
+    <h2 id="tradesTitle" class="lp-h2">What do you need done?</h2>
+    <p class="lp-sub">Pick a trade to see available labourers near you.</p>
+    <div class="lp-trades" id="tradeGrid"></div>
+  </section>
+
+  <section class="lp-section lp-alt" aria-labelledby="howTitle">
+    <div class="lp-wrap">
+      <h2 id="howTitle" class="lp-h2">How it works</h2>
+      <p class="lp-sub">Simple for both sides. No middlemen, no surprises.</p>
+      <div class="lp-how">
+        <div class="card lp-how-col">
+          <h3>🏠 For job posters</h3>
+          <ol class="lp-steps">
+            <li><b>Post a job or search</b><span>Describe the work, or browse labourers by trade and area.</span></li>
+            <li><b>Hire with confidence</b><span>Compare ratings, experience and verified badges, then hire.</span></li>
+            <li><b>Track and pay</b><span>See the labourer’s ETA, follow progress, and pay once it’s done.</span></li>
+          </ol>
+          <a class="btn" href="/signup-poster">Start hiring</a>
+        </div>
+        <div class="card lp-how-col">
+          <h3>🛠️ For labourers</h3>
+          <ol class="lp-steps">
+            <li><b>Create your profile</b><span>Add your trades, area and daily rate. It takes two minutes.</span></li>
+            <li><b>Get jobs nearby</b><span>Apply to jobs for your trades, or get booked directly.</span></li>
+            <li><b>Get paid and rated</b><span>Directions to every job, and good reviews bring more work.</span></li>
+          </ol>
+          <a class="btn" href="/signup-labourer">Join as a labourer</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-section lp-wrap" aria-labelledby="whyTitle">
+    <h2 id="whyTitle" class="lp-h2">Why people choose 9 to 5</h2>
+    <div class="lp-features">
+      <div class="lp-feature"><span>🪪</span><h3>Verified labourers</h3><p>Our team checks identities, so you know who is coming to your door.</p></div>
+      <div class="lp-feature"><span>📍</span><h3>Live arrival tracking</h3><p>See your labourer on the map with an arrival time once they accept.</p></div>
+      <div class="lp-feature"><span>🔒</span><h3>Private until booked</h3><p>Phone numbers and addresses are only shared after a booking is accepted.</p></div>
+      <div class="lp-feature"><span>💳</span><h3>Pay after the work</h3><p>Pay by UPI, card or net banking once the job is marked complete.</p></div>
+      <div class="lp-feature"><span>⭐</span><h3>Honest reviews</h3><p>Only people who actually hired a labourer can rate them.</p></div>
+      <div class="lp-feature"><span>🛟</span><h3>Help when you need it</h3><p>Chat, call or raise a ticket, plus a safety centre on every booking.</p></div>
+    </div>
+  </section>
+
+  <section class="lp-wrap">
+    <div class="lp-band">
+      <div>
+        <h2>Ready to get your job done?</h2>
+        <p>It’s free to sign up and takes about two minutes.</p>
+      </div>
+      <div class="lp-cta">
+        <a class="btn lp-btn lp-btn-light" href="/signup">Create a free account</a>
+        <a class="btn ghost lp-btn lp-btn-outline" href="#" data-support="help">Talk to support</a>
+      </div>
+    </div>
+  </section>
+
   <script src="/js/common.js"></script>
-  <script src="/js/home.js"></script>
+  <script src="/js/landing.js"></script>
 </body>
 </html>

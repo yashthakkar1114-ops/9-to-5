@@ -11,9 +11,16 @@ CREATE TABLE IF NOT EXISTS users (
   created_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Areas labourers pick from at signup; managed by the admin.
+CREATE TABLE IF NOT EXISTS areas (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL UNIQUE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS labourer_profiles (
   user_id      INT PRIMARY KEY,
-  trade        VARCHAR(50)  NOT NULL,
+  trades       VARCHAR(255) NOT NULL,  -- comma-separated, e.g. 'Painter,Mason'
   area         VARCHAR(100) NOT NULL,
   daily_rate   INT NOT NULL,
   skills       VARCHAR(255) NOT NULL DEFAULT '',
@@ -31,6 +38,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   title      VARCHAR(150) NOT NULL,
   trade      VARCHAR(50)  NOT NULL,
   location   VARCHAR(100) NOT NULL,
+  address    VARCHAR(255) NOT NULL DEFAULT '',
   budget     INT NOT NULL,
   job_date   DATE NOT NULL,
   details    TEXT,
@@ -51,16 +59,21 @@ CREATE TABLE IF NOT EXISTS applications (
   FOREIGN KEY (labourer_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
+-- Work flow: pending -> accepted -> started -> in_progress -> completed (then paid).
 CREATE TABLE IF NOT EXISTS bookings (
-  id           INT AUTO_INCREMENT PRIMARY KEY,
-  job_id       INT NULL,
-  poster_id    INT NOT NULL,
-  labourer_id  INT NOT NULL,
-  booking_date DATE NOT NULL,
-  amount       INT NOT NULL,
-  note         VARCHAR(255) NOT NULL DEFAULT '',
-  status       ENUM('pending','accepted','rejected','completed','cancelled') NOT NULL DEFAULT 'pending',
-  created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  id             INT AUTO_INCREMENT PRIMARY KEY,
+  job_id         INT NULL,
+  poster_id      INT NOT NULL,
+  labourer_id    INT NOT NULL,
+  booking_date   DATE NOT NULL,
+  amount         INT NOT NULL,
+  note           VARCHAR(255) NOT NULL DEFAULT '',
+  address        VARCHAR(255) NOT NULL DEFAULT '',
+  status         ENUM('pending','accepted','started','in_progress','completed','rejected','cancelled') NOT NULL DEFAULT 'pending',
+  paid_at        TIMESTAMP NULL,
+  payment_method VARCHAR(20) NULL,
+  payment_ref    VARCHAR(30) NULL,
+  created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (job_id) REFERENCES jobs(id) ON DELETE SET NULL,
   FOREIGN KEY (poster_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (labourer_id) REFERENCES users(id) ON DELETE CASCADE

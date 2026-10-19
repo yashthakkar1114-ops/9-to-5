@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="9 to 5">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2a74f0"/>
+      <stop offset="1" stop-color="#0b3f98"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="url(#bg)"/>
+  <!-- clock face with its hands on 9 and 5 -->
+  <circle cx="32" cy="32" r="19" fill="none" stroke="#fff" stroke-width="5"/>
+  <path d="M32 32H19" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+  <path d="M32 32l7 12" stroke="#ffb020" stroke-width="5" stroke-linecap="round"/>
+  <circle cx="32" cy="32" r="3.5" fill="#fff"/>
+</svg>

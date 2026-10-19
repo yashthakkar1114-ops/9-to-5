@@ -5,8 +5,12 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 const { loadUser } = require('./middleware/auth');
 const { TRADES } = require('./validate');
+const { query } = require('./db');
 
 const app = express();
+
+// Hosting platforms sit behind one reverse proxy; trust it so rate limits and secure cookies see the real client.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
 app.use(helmet());
 app.use(express.json({ limit: '100kb' }));
@@ -14,6 +18,10 @@ app.use(cookieParser());
 app.use(loadUser);
 
 app.get('/api/trades', (req, res) => res.json({ trades: TRADES }));
+app.get('/api/areas', async (req, res) => {
+  const rows = await query('SELECT name FROM areas ORDER BY name');
+  res.json({ areas: rows.map(r => r.name) });
+});
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/labourers', require('./routes/labourers'));
 app.use('/api/jobs', require('./routes/jobs'));

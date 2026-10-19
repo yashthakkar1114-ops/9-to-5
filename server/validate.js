@@ -1,6 +1,16 @@
 // Small input helpers. Each throws a 400 error with a readable message.
+const { query } = require('./db');
 
 const TRADES = ['Plumber', 'Carpenter', 'Electrician', 'Mover', 'Painter', 'Mason', 'Cleaner', 'Helper'];
+
+// Kept in step with PASSWORD_RULES in public/js/common.js, which shows them live while typing.
+const PASSWORD_RULES = [
+  [/^.{8,}$/, 'at least 8 characters'],
+  [/[A-Z]/, 'an uppercase letter'],
+  [/[a-z]/, 'a lowercase letter'],
+  [/\d/, 'a number'],
+  [/[^A-Za-z0-9\s]/, 'a special character'],
+];
 
 class BadRequest extends Error {
   constructor(message) {
@@ -35,9 +45,33 @@ function phone(value) {
   return v;
 }
 
+function password(value, field = 'Password') {
+  const v = str(value, field, { max: 72 });
+  const missing = PASSWORD_RULES.filter(([re]) => !re.test(v)).map(([, label]) => label);
+  if (missing.length) throw new BadRequest(`${field} needs ${missing.join(', ')}.`);
+  return v;
+}
+
 function trade(value) {
   if (!TRADES.includes(value)) throw new BadRequest('Choose a valid trade.');
   return value;
+}
+
+// Accepts ['Painter', 'Mason'] or 'Painter,Mason'; returns 'Painter,Mason' in TRADES order.
+function trades(value) {
+  const list = Array.isArray(value) ? value : typeof value === 'string' ? value.split(',') : [];
+  const picked = list.map(t => String(t).trim()).filter(Boolean);
+  if (!picked.length) throw new BadRequest('Choose at least one trade.');
+  if (!picked.every(t => TRADES.includes(t))) throw new BadRequest('Choose a valid trade.');
+  return TRADES.filter(t => picked.includes(t)).join(',');
+}
+
+// Must be one of the areas the admin has added.
+async function area(value) {
+  const v = str(value, 'Area', { max: 100 });
+  const [row] = await query('SELECT name FROM areas WHERE name = ?', [v]);
+  if (!row) throw new BadRequest('Choose an area from the list.');
+  return row.name;
 }
 
 function date(value, field = 'Date') {
@@ -49,4 +83,4 @@ function date(value, field = 'Date') {
   return value;
 }
 
-module.exports = { TRADES, BadRequest, str, int, email, phone, trade, date };
+module.exports = { TRADES, BadRequest, str, int, email, phone, password, trade, trades, area, date };

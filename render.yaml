@@ -1,0 +1,31 @@
+# Render Blueprint: New > Blueprint, then pick this repo. Fill in the DB_* values from your Aiven MySQL service.
+services:
+  - type: web
+    name: nine-to-five
+    runtime: node
+    plan: free
+    # db:setup is safe to re-run: it creates/upgrades tables and only seeds an empty database.
+    buildCommand: npm ci && npm run db:setup
+    startCommand: npm start
+    healthCheckPath: /api/trades
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: JWT_SECRET
+        generateValue: true
+      - key: DB_SSL
+        value: "true"
+      - key: DB_HOST
+        sync: false
+      - key: DB_PORT
+        sync: false
+      - key: DB_USER
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: DB_SSL_CA
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false

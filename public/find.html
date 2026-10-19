@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Find Labourers — 9 to 5</title>
+  <link rel="icon" href="/assets/logo.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <header id="siteHeader" class="site-header"><a class="brand" href="/"><img src="/assets/logo.svg" alt="" width="32" height="32"><span>9 to 5</span></a></header>
+  <main class="container">
+    <section class="hero" aria-labelledby="hero-title">
+      <h1 id="hero-title">Find trusted labourers nearby — fast</h1>
+      <p>Search skilled daily-wage workers — plumbing, carpentry, movers and more.</p>
+      <form class="search-bar" id="searchForm" role="search">
+        <input type="search" name="q" placeholder="Search name or skill (e.g. leak repair)" aria-label="Search">
+        <select name="trade" id="tradeFilter" aria-label="Trade"><option value="">All trades</option></select>
+        <input type="search" name="area" placeholder="Area (e.g. Andheri)" aria-label="Area">
+        <button class="btn" type="submit">Search</button>
+      </form>
+    </section>
+
+    <section aria-labelledby="workers-heading">
+      <h2 id="workers-heading">Available Labourers</h2>
+      <div id="workersGrid" class="grid" aria-live="polite"></div>
+    </section>
+
+    <section aria-labelledby="jobs-heading">
+      <div class="section-head">
+        <h2 id="jobs-heading">Recent Job Posts</h2>
+        <a href="/jobs">See all jobs →</a>
+      </div>
+      <div id="jobsList" class="list" aria-live="polite"></div>
+    </section>
+  </main>
+  <script src="/js/common.js"></script>
+  <script src="/js/home.js"></script>
+</body>
+</html>

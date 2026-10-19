@@ -5,11 +5,13 @@ const { requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-function readJob(b) {
+// Location must be one of the admin's areas; an edited job may keep its current location.
+async function readJob(b, currentLocation) {
   return {
     title: v.str(b.title, 'Job title', { min: 3, max: 150 }),
     trade: v.trade(b.trade),
-    location: v.str(b.location, 'Location', { max: 100 }),
+    location: currentLocation && b.location === currentLocation ? currentLocation : await v.area(b.location),
+    address: v.str(b.address, 'Full address', { min: 5, max: 255 }),
     budget: v.int(b.budget, 'Budget', { min: 100, max: 10000000 }),
     job_date: v.date(b.job_date, 'Job date'),
     details: v.str(b.details, 'Details', { optional: true, max: 2000 }),
@@ -25,10 +27,14 @@ async function ownJob(req, res) {
   return job;
 }
 
-// GET /api/jobs?q=&trade=&location= -> open jobs (public)
+// GET /api/jobs?q=&trade=&location= -> open jobs (public; labourers only see jobs for their trades)
 router.get('/', async (req, res) => {
   const where = ["j.status = 'open'", "u.status = 'active'"];
   const params = [];
+  if (req.user?.role === 'labourer') {
+    where.push('FIND_IN_SET(j.trade, (SELECT trades FROM labourer_profiles WHERE user_id = ?))');
+    params.push(req.user.id);
+  }
   if (req.query.trade) {
     where.push('j.trade = ?');
     params.push(req.query.trade);
@@ -46,7 +52,7 @@ router.get('/', async (req, res) => {
     `SELECT j.id, j.title, j.trade, j.location, j.budget, j.job_date, j.details, j.created_at,
        u.name AS poster_name,
        (SELECT COUNT(*) FROM applications a WHERE a.job_id = j.id) AS applicant_count,
-       EXISTS(SELECT 1 FROM applications a WHERE a.job_id = j.id AND a.labourer_id = ?) AS has_applied
+       (SELECT a.status FROM applications a WHERE a.job_id = j.id AND a.labourer_id = ?) AS my_application
      FROM jobs j JOIN users u ON u.id = j.poster_id
      WHERE ${where.join(' AND ')}
      ORDER BY j.created_at DESC LIMIT 100`,
@@ -61,7 +67,9 @@ router.get('/mine', requireRole('poster'), async (req, res) => {
     `SELECT j.*,
        (SELECT COUNT(*) FROM applications a WHERE a.job_id = j.id AND a.status = 'pending') AS pending_count,
        (SELECT u.name FROM bookings b JOIN users u ON u.id = b.labourer_id
-          WHERE b.job_id = j.id AND b.status IN ('accepted','completed') LIMIT 1) AS hired_name
+          WHERE b.job_id = j.id AND b.status IN ('accepted','started','in_progress','completed') LIMIT 1) AS hired_name,
+       (SELECT b.status FROM bookings b
+          WHERE b.job_id = j.id AND b.status IN ('accepted','started','in_progress','completed') LIMIT 1) AS work_status
      FROM jobs j WHERE j.poster_id = ? ORDER BY j.created_at DESC`,
     [req.user.id]
   );
@@ -82,7 +90,7 @@ router.get('/applied', requireRole('labourer'), async (req, res) => {
 
 // POST /api/jobs -> create job (poster)
 router.post('/', requireRole('poster'), async (req, res) => {
-  const job = readJob(req.body);
+  const job = await readJob(req.body);
   const r = await query('INSERT INTO jobs SET ?', [{ ...job, poster_id: req.user.id }]);
   res.status(201).json({ id: r.insertId });
 });
@@ -97,7 +105,7 @@ router.patch('/:id', requireRole('poster'), async (req, res) => {
     await query('UPDATE jobs SET status = ? WHERE id = ?', [req.body.status, job.id]);
   } else {
     if (job.status !== 'open') throw new v.BadRequest('Only open jobs can be edited.');
-    await query('UPDATE jobs SET ? WHERE id = ?', [readJob(req.body), job.id]);
+    await query('UPDATE jobs SET ? WHERE id = ?', [await readJob(req.body, job.location), job.id]);
   }
   res.json({ ok: true });
 });
@@ -108,7 +116,7 @@ router.get('/:id/applications', requireRole('poster'), async (req, res) => {
   if (!job) return;
   const applications = await query(
     `SELECT a.id, a.status, a.message, a.created_at, u.id AS labourer_id, u.name, u.phone,
-       p.trade, p.area, p.daily_rate, p.experience, p.verified, p.rating_avg, p.rating_count
+       p.trades, p.area, p.daily_rate, p.experience, p.verified, p.rating_avg, p.rating_count
      FROM applications a JOIN users u ON u.id = a.labourer_id JOIN labourer_profiles p ON p.user_id = u.id
      WHERE a.job_id = ? ORDER BY a.created_at`,
     [job.id]
@@ -119,9 +127,14 @@ router.get('/:id/applications', requireRole('poster'), async (req, res) => {
 // POST /api/jobs/:id/apply { message } (labourer)
 router.post('/:id/apply', requireRole('labourer'), async (req, res) => {
   const message = v.str(req.body.message, 'Message', { optional: true });
-  const [job] = await query("SELECT id, status FROM jobs WHERE id = ?", [req.params.id]);
+  const [job] = await query(
+    `SELECT j.id, j.status, j.trade, FIND_IN_SET(j.trade, p.trades) AS fits
+     FROM jobs j JOIN labourer_profiles p ON p.user_id = ? WHERE j.id = ?`,
+    [req.user.id, req.params.id]
+  );
   if (!job) return res.status(404).json({ error: 'Job not found.' });
   if (job.status !== 'open') throw new v.BadRequest('This job is no longer open.');
+  if (!job.fits) throw new v.BadRequest(`This job needs a ${job.trade}. Add that trade to your profile to apply.`);
   try {
     await query('INSERT INTO applications (job_id, labourer_id, message) VALUES (?, ?, ?)', [job.id, req.user.id, message]);
   } catch (err) {
@@ -131,6 +144,18 @@ router.post('/:id/apply', requireRole('labourer'), async (req, res) => {
   res.status(201).json({ ok: true });
 });
 
+// POST /api/jobs/:id/applications/:appId/reject (poster) -> declines one applicant
+router.post('/:id/applications/:appId/reject', requireRole('poster'), async (req, res) => {
+  const job = await ownJob(req, res);
+  if (!job) return;
+  const r = await query(
+    "UPDATE applications SET status = 'rejected' WHERE id = ? AND job_id = ? AND status = 'pending'",
+    [req.params.appId, job.id]
+  );
+  if (!r.affectedRows) throw new v.BadRequest('This applicant has already been hired or rejected.');
+  res.json({ ok: true });
+});
+
 // POST /api/jobs/:id/hire { application_id } (poster) -> creates an accepted booking
 router.post('/:id/hire', requireRole('poster'), async (req, res) => {
   const job = await ownJob(req, res);
@@ -138,6 +163,7 @@ router.post('/:id/hire', requireRole('poster'), async (req, res) => {
   if (job.status !== 'open') throw new v.BadRequest('This job is not open.');
   const [app] = await query('SELECT * FROM applications WHERE id = ? AND job_id = ?', [req.body.application_id, job.id]);
   if (!app) return res.status(404).json({ error: 'Application not found.' });
+  if (app.status !== 'pending') throw new v.BadRequest('This applicant was already rejected.');
 
   const conn = await pool.getConnection();
   try {
@@ -145,8 +171,8 @@ router.post('/:id/hire', requireRole('poster'), async (req, res) => {
     await conn.query("UPDATE applications SET status = IF(id = ?, 'accepted', 'rejected') WHERE job_id = ?", [app.id, job.id]);
     await conn.query("UPDATE jobs SET status = 'assigned' WHERE id = ?", [job.id]);
     await conn.query(
-      "INSERT INTO bookings (job_id, poster_id, labourer_id, booking_date, amount, note, status) VALUES (?, ?, ?, ?, ?, ?, 'accepted')",
-      [job.id, req.user.id, app.labourer_id, job.job_date, job.budget, job.title]
+      "INSERT INTO bookings (job_id, poster_id, labourer_id, booking_date, amount, note, address, status) VALUES (?, ?, ?, ?, ?, ?, ?, 'accepted')",
+      [job.id, req.user.id, app.labourer_id, job.job_date, job.budget, job.title, job.address || job.location]
     );
     await conn.commit();
   } catch (err) {
