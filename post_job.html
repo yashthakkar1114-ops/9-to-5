@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Post Job - 9 to 5</title>
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">9 to 5</div>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="post_job.html" class="active">Post Job</a>
+      <a href="dashboard.html">Dashboard</a>
+    </nav>
+  </header>
+  <main class="container">
+    <h1>Post a Job</h1>
+    <form id="postJobForm" class="card form-card">
+      <label>Job Title <input name="title" required></label>
+      <label>Type
+        <select name="type" required>
+          <option>Plumber</option>
+          <option>Carpenter</option>
+          <option>Electrician</option>
+          <option>Painter</option>
+          <option>Mover</option>
+        </select>
+      </label>
+      <label>Location <input name="location" required></label>
+      <label>Budget (₹) <input name="budget" type="number" required></label>
+      <label>Date <input name="date" type="date" required></label>
+      <label>Details <textarea name="details" rows="4"></textarea></label>
+      <div style="display:flex; gap:8px">
+        <button class="btn" type="submit">Post Job</button>
+        <a href="index.html" class="btn ghost">Cancel</a>
+      </div>
+    </form>
+    <div id="postMsg" class="muted" style="margin-top:12px"></div>
+  </main>
+  <script src="js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+{
+    "workers": [
+      {"id":"w1","name":"Ram Kumar","type":"Plumber","location":"Andheri","rating":4.5,"skills":"Leak repair, Pipe replacement","rate":600},
+      {"id":"w2","name":"Meena Patel","type":"Carpenter","location":"Powai","rating":4.7,"skills":"Furniture repair, Doors","rate":800},
+      {"id":"w3","name":"Suresh Singh","type":"Electrician","location":"Lower Parel","rating":4.4,"skills":"Wiring, Switchboards","rate":700}
+    ],
+    "jobs": [
+      {"id":"j1","title":"Fix bathroom leak","type":"Plumber","location":"Bandra","budget":500,"date":"2025-11-15","details":"Leak under sink","postedAt":1699999999999}
+    ]
+  }
+  
