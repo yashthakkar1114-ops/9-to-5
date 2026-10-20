@@ -34,8 +34,16 @@
     <span class="mock-badge">Mock payment · test mode</span>
     <h1 style="margin-top:10px">Pay ${esc(b.other_name)}</h1>
     <p class="muted">${esc(b.note || 'Booking #' + b.id)} · ${fmtDate(b.booking_date)}</p>
-    <div class="pay-amount">${rupees(b.amount)}</div>
     <form id="payForm">
+      <label class="pay-edit">Amount to pay
+        <span class="pay-input"><span>₹</span><input name="amount" type="number" inputmode="numeric" min="1" max="10000000" step="1"
+          required value="${b.amount}" aria-describedby="payDiff"></span>
+      </label>
+      <p class="pay-diff" id="payDiff">Agreed amount: ${rupees(b.amount)}</p>
+      <div class="pay-quick">
+        <button type="button" class="chip-btn" data-set="${b.amount}">Agreed ${rupees(b.amount)}</button>
+        ${[50, 100, 200].map(t => `<button type="button" class="chip-btn" data-add="${t}">+ ₹${t} tip</button>`).join('')}
+      </div>
       <fieldset class="field-group">
         <legend>Pay with</legend>
         <div class="chips">${Object.entries(METHODS).map(([k, label], i) => `
@@ -45,10 +53,35 @@
       <button class="btn block success" type="submit">Pay ${rupees(b.amount)}</button>
       <p class="mock-note">Demo only: no card or UPI details are collected and no money is charged.</p>
     </form>`;
-  handleForm($('#payForm'), async data => {
-    const { payment_ref } = await api(`/bookings/${b.id}/pay`, { method: 'POST', body: { method: data.method } });
+  // Editable amount: the button and the "vs agreed" line follow what the poster types.
+  const form = $('#payForm');
+  const input = form.amount;
+  const payBtn = $('button[type=submit]', form);
+  const updateAmount = () => {
+    const n = Math.round(Number(input.value));
+    const valid = input.value !== '' && n >= 1;
+    payBtn.textContent = valid ? `Pay ${rupees(n)}` : 'Enter an amount';
+    payBtn.disabled = !valid;
+    const diff = n - b.amount;
+    $('#payDiff').innerHTML = !valid || diff === 0
+      ? `Agreed amount: ${rupees(b.amount)}`
+      : `Agreed amount: ${rupees(b.amount)} · <strong class="${diff > 0 ? 'success' : 'error'}">${rupees(Math.abs(diff))} ${diff > 0 ? 'more' : 'less'} than agreed</strong>`;
+  };
+  input.addEventListener('input', updateAmount);
+  $('.pay-quick', form).addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    input.value = btn.dataset.set ?? b.amount + Number(btn.dataset.add);
+    updateAmount();
+  });
+  updateAmount();
+
+  handleForm(form, async data => {
+    const amount = Math.round(Number(data.amount));
+    if (amount < b.amount && !confirm(`You are paying ${rupees(b.amount - amount)} less than the agreed ${rupees(b.amount)}. Continue?`)) return;
+    const res = await api(`/bookings/${b.id}/pay`, { method: 'POST', body: { method: data.method, amount } });
     toast('Payment successful.');
-    receipt({ ...b, payment_ref, payment_method: data.method, paid_at: new Date().toISOString() });
+    receipt({ ...b, amount: res.amount, payment_ref: res.payment_ref, payment_method: data.method, paid_at: new Date().toISOString() });
   });
 })().catch(err => {
   $('#payBox').innerHTML = `<p class="empty error">${esc(err.message)}</p>`;

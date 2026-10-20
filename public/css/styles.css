@@ -605,3 +605,34 @@ body.landing{ background:#fff; }
   .help-fab b{ display:none; }
   .help-fab{ padding:10px; }
 }
+
+/* ---- real Google map on bookings ---- */
+.realmap iframe{ display:block; width:100%; height:260px; border:0; background:#eef2ea; }
+.realmap .map-tag{ left:auto; right:10px; }
+.eta-progress{ height:6px; background:#e7eefb; border-radius:999px; overflow:hidden; margin-top:8px; max-width:280px; }
+.eta-progress span{ display:block; height:100%; width:0; background:linear-gradient(90deg,#1155cc,#2a74f0); border-radius:inherit; transition:width 1s linear; }
+
+/* ---- mobile filter bars (Browse Jobs, Find Labourers) ----
+   In a column layout the old flex-basis:220px turned into a 220px height, so use a grid instead. */
+@media (max-width:600px){
+  .hero{ padding:18px 16px; }
+  .hero h1{ font-size:21px; }
+  .search-bar{ display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:stretch; }
+  .search-bar input[type="text"],
+  .search-bar input[type="search"],
+  .search-bar select{ flex:none; width:100%; min-width:0; padding:10px 12px; font-size:16px; height:44px; border-color:rgba(16,24,40,0.12); }
+  .search-bar > :first-child{ grid-column:1 / -1; }
+  .search-bar .btn{ grid-column:1 / -1; justify-content:center; height:44px; }
+  .realmap iframe{ height:200px; }
+}
+
+/* ---- editable payment amount ---- */
+.pay-edit{ display:block; margin:18px 0 4px; font-weight:700; font-size:14px; color:#23313a; }
+.pay-input{ display:flex; align-items:center; gap:6px; margin-top:8px; padding:6px 14px; border:2px solid rgba(17,85,204,0.25); border-radius:12px; background:#fff; }
+.pay-input:focus-within{ border-color:var(--accent); box-shadow:0 0 0 4px rgba(17,85,204,0.1); }
+.pay-input > span{ font-size:30px; font-weight:800; color:var(--muted); }
+.form-card .pay-input input{ border:0; padding:4px 0; margin:0; font-size:34px; font-weight:800; color:#14222d; background:transparent; box-shadow:none; width:100%; min-width:0; }
+.pay-diff{ margin:4px 0 10px; font-size:13px; color:var(--muted); }
+.pay-quick{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
+.chip-btn{ border:1px solid rgba(12,20,40,0.12); background:#fff; color:#253245; border-radius:999px; padding:6px 12px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
+.chip-btn:hover{ border-color:var(--accent); color:var(--accent); background:#eef4ff; }

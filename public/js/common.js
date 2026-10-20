@@ -390,15 +390,44 @@ function mockMap({ id, address, viewer, status, otherName }) {
   </div>`;
 }
 
-// Moves each en-route marker along its route and counts the ETA down. The ETA goes away once the job starts
+// Real Google map of the exact address the poster entered (embed needs no API key), used on bookings.
+// The poster also sees a (demo) ETA until the labourer starts the job.
+const embedLink = address => 'https://www.google.com/maps?output=embed&q=' + encodeURIComponent(address);
+
+function bookingMap({ id, address, viewer, status, otherName }) {
+  const trip = mockTrip(id);
+  const enRoute = viewer === 'poster' && status === 'accepted';
+  const onSite = ['started', 'in_progress'].includes(status);
+
+  const info = viewer === 'labourer'
+    ? `<div><strong>${onSite ? 'You are on site' : 'Job address'}</strong><span>${esc(address)}</span></div>
+       <a class="btn small" href="${directionsLink(address)}" target="_blank" rel="noopener">Get directions in Google Maps ↗</a>`
+    : `<div><strong>${enRoute ? `${esc(otherName)} is on the way` : `${esc(otherName)} is on site`}</strong>
+         <span>${enRoute ? `<b class="eta-text">Arriving in ${trip.minutes} min</b> · ` : 'Work has started · '}${esc(address)}</span>
+         ${enRoute ? '<div class="eta-progress"><span></span></div>' : ''}</div>
+       <a class="btn small ghost" href="${mapLink(address)}" target="_blank" rel="noopener">Open in Google Maps ↗</a>`;
+
+  return `<div class="mockmap realmap" ${enRoute ? `data-eta-until="${trip.until}" data-eta-total="${trip.minutes}"` : ''}>
+    <iframe src="${embedLink(address)}" title="Map of ${esc(address)}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+    ${enRoute ? '<span class="map-tag">ETA is a demo estimate</span>' : ''}
+    <div class="map-bar">${info}</div>
+  </div>`;
+}
+
+// Counts each ETA down (and moves the marker on drawn maps). The ETA goes away once the job starts
 // because the map is then re-drawn without data-eta-until.
 function tickMaps() {
   for (const map of $$('[data-eta-until]')) {
     const left = Math.max(0, Number(map.dataset.etaUntil) - Date.now());
     const total = Number(map.dataset.etaTotal) * 60000;
+    const done = Math.min(1, 1 - left / total);
     const route = $('.map-route', map);
-    const p = route.getPointAtLength(route.getTotalLength() * Math.min(1, 1 - left / total));
-    $('.map-mover', map).setAttribute('transform', `translate(${p.x} ${p.y})`);
+    if (route) {
+      const p = route.getPointAtLength(route.getTotalLength() * done);
+      $('.map-mover', map).setAttribute('transform', `translate(${p.x} ${p.y})`);
+    }
+    const bar = $('.eta-progress span', map);
+    if (bar) bar.style.width = done * 100 + '%';
     const mins = Math.ceil(left / 60000);
     $('.eta-text', map).textContent = left <= 0 ? 'Arriving now' : `Arriving in ${mins} min`;
   }

@@ -106,7 +106,8 @@ router.patch('/:id', requireRole('poster', 'labourer'), async (req, res) => {
   res.json({ ok: true, status: rule.to });
 });
 
-// POST /api/bookings/:id/pay { method } (poster, after completion). Mock payment: no money moves.
+// POST /api/bookings/:id/pay { method, amount? } (poster, after completion). Mock payment: no money moves.
+// The poster may pay more or less than agreed (e.g. a tip or a shorter job); the amount paid is what's recorded.
 router.post('/:id/pay', requireRole('poster'), async (req, res) => {
   const method = req.body.method;
   if (!PAYMENT_METHODS.includes(method)) throw new v.BadRequest('Choose a payment method.');
@@ -114,13 +115,14 @@ router.post('/:id/pay', requireRole('poster'), async (req, res) => {
   if (!b) return res.status(404).json({ error: 'Booking not found.' });
   if (b.status !== 'completed') throw new v.BadRequest('You can pay once the work is completed.');
   if (b.paid_at) throw new v.BadRequest('This booking is already paid.');
+  const amount = req.body.amount === undefined ? b.amount : v.int(req.body.amount, 'Amount', { min: 1, max: 10000000 });
   const ref = 'MOCK' + crypto.randomBytes(5).toString('hex').toUpperCase();
   const r = await query(
-    'UPDATE bookings SET paid_at = NOW(), payment_method = ?, payment_ref = ? WHERE id = ? AND paid_at IS NULL',
-    [method, ref, b.id]
+    'UPDATE bookings SET paid_at = NOW(), payment_method = ?, payment_ref = ?, amount = ? WHERE id = ? AND paid_at IS NULL',
+    [method, ref, amount, b.id]
   );
   if (!r.affectedRows) throw new v.BadRequest('This booking is already paid.');
-  res.json({ ok: true, payment_ref: ref });
+  res.json({ ok: true, payment_ref: ref, amount });
 });
 
 // POST /api/bookings/:id/review { rating 1-5, comment } (poster, after completion)

@@ -79,12 +79,16 @@ router.get('/mine', requireRole('poster'), async (req, res) => {
 // GET /api/jobs/applied -> labourer's applications
 router.get('/applied', requireRole('labourer'), async (req, res) => {
   const applications = await query(
-    `SELECT a.id, a.status, a.message, a.created_at, j.id AS job_id, j.title, j.trade, j.location,
-       j.budget, j.job_date, j.status AS job_status, u.name AS poster_name
+    `SELECT a.id, a.status, a.message, a.created_at, j.id AS job_id, j.title, j.trade, j.location, j.address,
+       j.budget, j.job_date, j.status AS job_status, u.name AS poster_name,
+       (SELECT b.status FROM bookings b WHERE b.job_id = j.id AND b.labourer_id = a.labourer_id
+          ORDER BY b.id DESC LIMIT 1) AS work_status
      FROM applications a JOIN jobs j ON j.id = a.job_id JOIN users u ON u.id = j.poster_id
      WHERE a.labourer_id = ? ORDER BY a.created_at DESC`,
     [req.user.id]
   );
+  // The full address is only for the labourer who was hired.
+  for (const a of applications) if (a.status !== 'accepted') a.address = null;
   res.json({ applications });
 });
 

@@ -65,7 +65,7 @@
   const ACTIVE = ['accepted', 'started', 'in_progress'];
   function mapSection(b) {
     if (!ACTIVE.includes(b.status) || !b.address) return '';
-    return `${mockMap({ id: b.id, address: b.address, viewer: me.role, status: b.status, otherName: b.other_name })}
+    return `${bookingMap({ id: b.id, address: b.address, viewer: me.role, status: b.status, otherName: b.other_name })}
       <div class="booking-help">
         <a href="#" data-support="safety">🛡️ Safety centre</a>
         <a href="#" data-support="report" data-ctx="${b.id}">⚠️ Report a problem</a>
@@ -187,6 +187,8 @@
             <span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span><span>📅 ${fmtDate(j.job_date)}</span>
             ${j.hired_name ? `<span>Hired: <strong>${esc(j.hired_name)}</strong> ${j.work_status ? pill(j.work_status) : ''}</span>` : ''}
           </div>
+          ${j.address ? `<div class="meta" style="margin-top:4px"><span>🏠 ${esc(j.address)} ·
+            <a href="${mapLink(j.address)}" target="_blank" rel="noopener">Open in Google Maps ↗</a></span></div>` : ''}
         </div>
         <div class="side">
           <div class="price">${rupees(j.budget)}</div>
@@ -268,7 +270,10 @@
             <span>📅 ${fmtDate(a.job_date)}</span><span>👤 ${esc(a.poster_name)}</span></div>
           ${a.message ? `<p class="details">Your message: “${esc(a.message)}”</p>` : ''}
           ${a.status === 'rejected' ? '<p class="details error">The poster did not select you for this job.</p>' : ''}
-          ${a.status === 'accepted' ? '<p class="details success">You were hired! See the Bookings tab for details.</p>' : ''}
+          ${a.status === 'accepted' ? `<p class="details success">You were hired!${a.work_status ? ` Work status: ${pill(a.work_status)}` : ''}
+            See the Bookings tab for the map and contact details.</p>` : ''}
+          ${a.address ? `<div class="meta" style="margin-top:6px"><span>📍 <strong>${esc(a.address)}</strong> ·
+            <a href="${directionsLink(a.address)}" target="_blank" rel="noopener">Get directions ↗</a></span></div>` : ''}
         </div>
         <div class="side"><div class="price">${rupees(a.budget)}</div>${a.status === 'rejected'
           ? '<span class="pill pill-rejected">Not selected</span>' : pill(a.status)}</div>

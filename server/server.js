@@ -12,7 +12,10 @@ const app = express();
 // Hosting platforms sit behind one reverse proxy; trust it so rate limits and secure cookies see the real client.
 if (process.env.NODE_ENV === 'production') app.set('trust proxy', 1);
 
-app.use(helmet());
+// The only third-party frame allowed is the Google Maps embed on bookings.
+app.use(helmet({
+  contentSecurityPolicy: { directives: { frameSrc: ["'self'", 'https://www.google.com', 'https://maps.google.com'] } },
+}));
 app.use(express.json({ limit: '100kb' }));
 app.use(cookieParser());
 app.use(loadUser);
