@@ -74,13 +74,38 @@ async function area(value) {
   return row.name;
 }
 
+// The service runs in India, so "today" and "now" are Indian time whatever the server's timezone.
+function nowInIndia() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(new Date()).map(p => [p.type, p.value]));
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, time: `${parts.hour}:${parts.minute}` };
+}
+
 function date(value, field = 'Date') {
   if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value) || isNaN(Date.parse(value))) {
     throw new BadRequest(`${field} must be a valid date.`);
   }
-  const today = new Date().toISOString().slice(0, 10);
-  if (value < today) throw new BadRequest(`${field} cannot be in the past.`);
+  if (value < nowInIndia().date) throw new BadRequest(`${field} cannot be in the past.`);
   return value;
 }
 
-module.exports = { TRADES, BadRequest, str, int, email, phone, password, trade, trades, area, date };
+// Jobs are booked in time slots: a start time ('HH:MM') and a duration in minutes (30 min to 12 h, in 30 min steps).
+const MIN_DURATION = 30;
+const MAX_DURATION = 12 * 60;
+
+function slot(dateValue, startValue, durationValue, field = 'Job date') {
+  const day = date(dateValue, field);
+  const m = /^([01]\d|2[0-3]):([0-5]\d)(:00)?$/.exec(typeof startValue === 'string' ? startValue : '');
+  if (!m) throw new BadRequest('Choose a valid start time.');
+  const start = `${m[1]}:${m[2]}`;
+  const minutes = Number(durationValue);
+  if (!Number.isInteger(minutes) || minutes < MIN_DURATION || minutes > MAX_DURATION || minutes % 30) {
+    throw new BadRequest('Choose a duration between 30 minutes and 12 hours.');
+  }
+  const now = nowInIndia();
+  if (day === now.date && start <= now.time) throw new BadRequest('That start time has already passed today.');
+  return { date: day, start_time: start, duration_minutes: minutes };
+}
+
+module.exports = { TRADES, BadRequest, str, int, email, phone, password, trade, trades, area, date, slot, nowInIndia };

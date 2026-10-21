@@ -49,7 +49,7 @@
       <a class="card job-card" href="/jobs" style="text-decoration:none;color:inherit">
         <div>
           <h3>${esc(j.title)}</h3>
-          <div class="meta"><span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span><span>📅 ${fmtDate(j.job_date)}</span></div>
+          <div class="meta"><span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span><span>📅 ${slotText(j.job_date, j.start_time, j.duration_minutes)}</span></div>
         </div>
         <div class="side"><div class="price">${rupees(j.budget)}</div></div>
       </a>`).join('') || '<div class="card empty">No open jobs right now.</div>';
@@ -82,7 +82,7 @@
     const body = openModal(`Book ${l.name}`, `
       <p class="muted">${esc(splitTrades(l.trades).join(', '))} · ${rupees(l.daily_rate)}/day. ${esc(l.name.split(' ')[0])} will confirm the booking.</p>
       <form class="form-card" style="padding:0">
-        <label>Date <input name="booking_date" type="date" required min="${today()}"></label>
+        ${slotFields({ dateName: 'booking_date' })}
         <label>Amount offered (₹) <input name="amount" type="number" min="100" required value="${l.daily_rate}"></label>
         <label>Work address <input name="address" required minlength="5" maxlength="255" placeholder="Flat / building, street, area"></label>
         <label>Work description <textarea name="note" rows="3" maxlength="255" placeholder="What needs to be done, timing…"></textarea></label>
@@ -90,6 +90,7 @@
         <div class="form-error"></div>
         <button class="btn" type="submit">Send booking request</button>
       </form>`);
+    bindSlotFields($('form', body));
     handleForm($('form', body), async data => {
       await api('/bookings', { method: 'POST', body: { ...data, labourer_id: l.id } });
       closeModal();

@@ -33,7 +33,7 @@
   box.innerHTML = `
     <span class="mock-badge">Mock payment · test mode</span>
     <h1 style="margin-top:10px">Pay ${esc(b.other_name)}</h1>
-    <p class="muted">${esc(b.note || 'Booking #' + b.id)} · ${fmtDate(b.booking_date)}</p>
+    <p class="muted">${esc(b.note || 'Booking #' + b.id)} · ${slotText(b.booking_date, b.start_time, b.duration_minutes)}</p>
     <form id="payForm">
       <label class="pay-edit">Amount to pay
         <span class="pay-input"><span>₹</span><input name="amount" type="number" inputmode="numeric" min="1" max="10000000" step="1"

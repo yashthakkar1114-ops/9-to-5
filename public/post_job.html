@@ -20,7 +20,7 @@
         <label class="full">Full address <input name="address" required minlength="5" maxlength="255" placeholder="Flat / building, street, area, pincode">
           <small class="muted">Only shared with the labourer you hire, as a map pin.</small></label>
         <label>Budget (₹) <input name="budget" type="number" min="100" required></label>
-        <label>Date needed <input name="job_date" type="date" required></label>
+        <fieldset class="full field-group" id="slotBox"><legend>When is the work? <span class="muted">A labourer can only take one job at a time.</span></legend></fieldset>
         <label class="full">Details <textarea name="details" rows="4" placeholder="Describe the work, tools needed, timing…"></textarea></label>
       </div>
       <div class="form-error"></div>

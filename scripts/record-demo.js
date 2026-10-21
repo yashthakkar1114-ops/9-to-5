@@ -1,6 +1,7 @@
 // Records a hands-free demo video of the whole workflow with Selenium.
 //   npm run demo:record                -> demo-video/9to5-demo.mp4
 //   npm run demo:record -- --restore   -> only put back the database backup (if a run was interrupted)
+//   npm run demo:record -- --encode-only -> rebuild the video from the last recording's frames
 //
 // Two headless Chrome windows emulate phones: Admin / Job Poster on the left, Labourers on the right.
 // Each phone screen is captured with Chrome's screencast, and ffmpeg places both inside phone frames
@@ -24,6 +25,7 @@ const OUT_DIR = path.join(ROOT, 'demo-video');
 const FRAMES_DIR = path.join(OUT_DIR, 'frames');
 const BACKUP = path.join(OUT_DIR, 'db-backup.json');
 const VIDEO = path.join(OUT_DIR, '9to5-demo.mp4');
+const TIMELINE = path.join(FRAMES_DIR, 'timeline.json');
 const PORT = 8090; // its own server, so it doesn't clash with `npm run dev` on 8080
 const BASE = `http://localhost:${PORT}`;
 // Each phone shows a 390x844 mobile viewport (rendered at 2x), drawn on screen at 416x900.
@@ -42,6 +44,11 @@ const MOBILE_UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (
 const TABLES = ['users', 'areas', 'labourer_profiles', 'jobs', 'applications', 'bookings', 'reviews']; // parent tables first
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
+// A browser command that never answers would freeze the whole recording, so every one gets a time limit.
+const withTimeout = (promise, ms, what) => Promise.race([
+  promise,
+  new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} did not respond within ${ms / 1000}s`)), ms)),
+]);
 const ROLE = {
   admin: ['Admin', '#7c3aed'],
   poster: ['Job Poster · Priya', '#2563eb'],
@@ -54,8 +61,13 @@ const JOB = {
   area: 'Kandivali',
   address: '7 Mahavir Nagar, Kandivali West, Mumbai 400067',
   budget: '3000',
+  start: '10:00 am',
+  duration: '4 h',
+  paid: '3500', // more than the agreed budget: the work was good
   details: 'One bedroom, walls and ceiling. Paint is ready at home.',
 };
+// Priya's job from the demo data (9 am - 5 pm). Her new job goes on the same day, so the two time slots overlap.
+const OVERLAP_JOB = 'Paint 2BHK living room';
 
 // ---------------- Database backup / reset / restore ----------------
 
@@ -139,7 +151,9 @@ function overlayMain() {
       #__demo_root *{box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
       .dm-cur{position:fixed;z-index:2147483647;width:34px;height:34px;margin:-17px 0 0 -17px;border-radius:50%;
         background:rgba(30,41,59,.32);border:2px solid rgba(255,255,255,.95);box-shadow:0 2px 8px rgba(0,0,0,.35);pointer-events:none;
-        transition:left .7s cubic-bezier(.4,0,.2,1),top .7s cubic-bezier(.4,0,.2,1)}
+        transition:left .7s cubic-bezier(.4,0,.2,1),top .7s cubic-bezier(.4,0,.2,1),transform .15s}
+      .dm-cur.down{transform:scale(.8);background:rgba(30,41,59,.55)}
+      .dm-cur.drag{transition:left 1.1s ease-in-out,top 1.1s ease-in-out,transform .15s}
       .dm-ring{position:fixed;z-index:2147483646;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
         border:3px solid #f59e0b;pointer-events:none;animation:dm-ring .6s ease-out forwards}
       @keyframes dm-ring{from{transform:scale(.3);opacity:1}to{transform:scale(1.4);opacity:0}}
@@ -179,6 +193,8 @@ function overlayMain() {
   let dd, ddTarget;
   window.__demo = {
     moveTo(x, y) { Object.assign(state, { x, y }); save(); mount(); render(); },
+    // Finger pressed on the screen while dragging (used for swipes).
+    press(on) { mount(); root.querySelector('.dm-cur').classList.toggle('down', on); root.querySelector('.dm-cur').classList.toggle('drag', on); },
     ring() {
       mount();
       const r = document.createElement('div');
@@ -286,8 +302,15 @@ class Pane {
   async start() {
     const opts = new chrome.Options().addArguments(
       '--headless=new', '--window-size=500,1000', '--hide-scrollbars',
-      '--remote-allow-origins=*', '--no-first-run', '--disable-features=Translate', '--lang=en-IN',
-    ).setMobileEmulation({ deviceMetrics: { ...MOBILE, touch: true }, userAgent: MOBILE_UA });
+      '--remote-allow-origins=*', '--no-first-run', '--lang=en-IN', '--password-store=basic',
+      // The demo passwords are on leaked-password lists: Chrome's password manager would pop up warnings
+      // after each login, which are invisible in headless mode and can leave ChromeDriver waiting forever.
+      '--disable-features=Translate,PasswordLeakDetection,PasswordManagerOnboarding,PasswordCheck',
+    ).setUserPreferences({
+      credentials_enable_service: false,
+      'profile.password_manager_enabled': false,
+      'profile.password_manager_leak_detection': false,
+    }).setMobileEmulation({ deviceMetrics: { ...MOBILE, touch: true }, userAgent: MOBILE_UA });
     this.d = await new Builder().forBrowser('chrome').setChromeOptions(opts).build();
     const dbg = (await this.d.getCapabilities()).get('goog:chromeOptions').debuggerAddress;
     const targets = await (await fetch(`http://${dbg}/json`)).json();
@@ -303,21 +326,21 @@ class Pane {
     await this.cdp.send('Page.setBypassCSP', { enabled: true });
     await this.cdp.send('Page.addScriptToEvaluateOnNewDocument', { source: `(${overlayMain})();` });
     await this.cdp.send('Page.startScreencast', {
-      format: 'jpeg', quality: 90, everyNthFrame: 1,
+      format: 'jpeg', quality: 90, everyNthFrame: 2, // ~30 fps, matching the video
       maxWidth: MOBILE.width * MOBILE.pixelRatio, maxHeight: MOBILE.height * MOBILE.pixelRatio,
     });
   }
 
   async stop() {
-    try { await this.cdp?.send('Page.stopScreencast'); } catch {}
+    try { await withTimeout(this.cdp.send('Page.stopScreencast'), 5000, 'Stopping the screencast'); } catch {}
     this.cdp?.close();
-    try { await this.d?.quit(); } catch {}
+    try { await withTimeout(this.d.quit(), 15000, 'Closing the browser'); } catch {}
   }
 
-  js(script, ...args) { return this.d.executeScript(script, ...args); }
+  js(script, ...args) { return withTimeout(this.d.executeScript(script, ...args), 30000, `The ${this.name} phone`); }
 
   async go(urlPath) {
-    await this.d.get(BASE + urlPath);
+    await withTimeout(this.d.get(BASE + urlPath), 30000, `Loading ${urlPath} on the ${this.name} phone`);
     await this.ready();
   }
 
@@ -325,6 +348,35 @@ class Pane {
   async ready() {
     await this.d.wait(async () => this.js('return document.readyState === "complete" && !!window.__demo'), 15000);
     await sleep(400);
+    // On a phone the whole page should never be wider than the screen; wide tables scroll inside their own box.
+    const over = await this.js('return document.documentElement.scrollWidth - innerWidth');
+    if (over > 1) console.warn(`  note: ${await this.d.getCurrentUrl()} is ${over}px wider than the phone screen`);
+  }
+
+  // Swipes a sideways-scrolling box (like a wide table) with a finger, so its hidden columns come into view.
+  async swipe(target, { back = true, hold = 1800 } = {}) {
+    const el = typeof target === 'string' ? await this.waitVisible(target) : target;
+    await this.js('arguments[0].scrollIntoView({ block: "center", behavior: "smooth" })', el);
+    await sleep(700);
+    const r = await this.js(`const r = arguments[0].getBoundingClientRect();
+      return { x: r.left, w: r.width, y: Math.max(r.top, 0) + Math.min(r.height, innerHeight - Math.max(r.top, 0)) / 2,
+        max: arguments[0].scrollWidth - arguments[0].clientWidth };`, el);
+    if (r.max <= 0) return;
+    const drag = async (fromX, toX, left) => {
+      await this.js('__demo.moveTo(arguments[0], arguments[1])', fromX, r.y);
+      await sleep(800);
+      await this.js('__demo.press(true)');
+      await sleep(150);
+      await this.js('__demo.moveTo(arguments[0], arguments[1]); arguments[2].scrollTo({ left: arguments[3], behavior: "smooth" })', toX, r.y, el, left);
+      await sleep(1200);
+      await this.js('__demo.press(false)');
+    };
+    await drag(r.x + r.w * 0.82, r.x + r.w * 0.18, r.max);
+    await sleep(hold);
+    if (back) {
+      await drag(r.x + r.w * 0.18, r.x + r.w * 0.82, 0);
+      await sleep(500);
+    }
   }
 
   async waitUrl(part) {
@@ -361,7 +413,9 @@ class Pane {
     await this.point(el);
     await this.js('__demo.ring()');
     await sleep(150);
-    await el.click();
+    // Tapped from inside the page: ChromeDriver's own click once hung forever on a phone screen.
+    // Deferred so a tap that navigates can't leave this call waiting on the old page.
+    await this.js('const el = arguments[0]; el.focus({ preventScroll: true }); setTimeout(() => el.click(), 0);', el);
     await sleep(pause);
   }
 
@@ -369,7 +423,7 @@ class Pane {
     const el = typeof target === 'string' ? await this.waitVisible(target) : target;
     await this.click(el, 250);
     for (const ch of text) {
-      await el.sendKeys(ch);
+      await withTimeout(el.sendKeys(ch), 15000, `Typing on the ${this.name} phone`);
       await sleep(delay);
     }
     await sleep(300);
@@ -439,7 +493,8 @@ class Pane {
   }
 
   async screenshot(file) {
-    try { fs.writeFileSync(file, await this.d.takeScreenshot(), 'base64'); } catch {}
+    // Through DevTools rather than ChromeDriver, so it still works if ChromeDriver is stuck.
+    try { fs.writeFileSync(file, (await withTimeout(this.cdp.send('Page.captureScreenshot', { format: 'png' }), 10000, 'Screenshot')).data, 'base64'); } catch {}
   }
 }
 
@@ -471,17 +526,24 @@ class Narrator {
   async clip(text) {
     const file = path.join(VOICE_DIR, crypto.createHash('sha1').update(VOICE + text).digest('hex').slice(0, 16) + '.mp3');
     if (fs.existsSync(file)) return file;
-    const tmp = fs.mkdtempSync(path.join(VOICE_DIR, 'tmp-'));
-    const tts = new MsEdgeTTS();
-    try {
-      await tts.setMetadata(VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
-      const { audioFilePath } = await tts.toFile(tmp, text);
-      fs.renameSync(audioFilePath, file);
-    } finally {
-      tts.close();
-      fs.rmSync(tmp, { recursive: true, force: true });
+    // The online voice service occasionally stalls: give each try a time limit and retry.
+    for (let attempt = 1; ; attempt++) {
+      const tmp = fs.mkdtempSync(path.join(VOICE_DIR, 'tmp-'));
+      const tts = new MsEdgeTTS();
+      try {
+        await withTimeout((async () => {
+          await tts.setMetadata(VOICE, OUTPUT_FORMAT.AUDIO_24KHZ_96KBITRATE_MONO_MP3);
+          const { audioFilePath } = await tts.toFile(tmp, text);
+          fs.renameSync(audioFilePath, file);
+        })(), 20000, 'The voice service');
+        return file;
+      } catch (err) {
+        if (attempt === 3) throw err;
+      } finally {
+        tts.close();
+        fs.rmSync(tmp, { recursive: true, force: true });
+      }
     }
-    return file;
   }
 
   // Starts a sentence once the previous one has finished, and returns as soon as it starts.
@@ -505,6 +567,9 @@ const captions = []; // { t, side, role, color, text }: what each phone's captio
 // ---------------- The demo itself ----------------
 
 async function demo(L, R) {
+  const { jobs } = await (await fetch(BASE + '/api/jobs')).json();
+  const slotDay = String(jobs.find(j => j.title === OVERLAP_JOB).job_date).slice(0, 10);
+
   // Intro
   await Promise.all([L.go('/'), R.go('/')]);
   await Promise.all([
@@ -530,7 +595,7 @@ async function demo(L, R) {
   await L.say('admin', 'First, the admin logs in on a private page.');
   await L.login('admin@9to5.local', 'admin1234', 'admin');
   await L.say('admin', 'At the top are the numbers. Below is the list of all users.');
-  await sleep(2000);
+  await L.swipe('#tabBody .table-wrap');
   const verify = await L.findX("//tr[.//strong[normalize-space()='Anil Yadav']]//button[@data-verify]");
   await L.say('admin', 'The admin checks a worker called Anil, and verifies him.');
   await L.click(verify, 1800);
@@ -538,7 +603,7 @@ async function demo(L, R) {
   await L.click('#tabs [data-tab="areas"]', 1200);
   await L.type('#areaForm [name=name]', JOB.area, 60);
   await L.click('#areaForm button[type=submit]', 800);
-  await L.findX(`//td/strong[normalize-space()='${JOB.area}']`);
+  await L.point(await L.findX(`//td/strong[normalize-space()='${JOB.area}']`));
   await L.say('admin', `${JOB.area} is added. Now everyone can pick it.`);
   await sleep(1500);
   await L.logout();
@@ -558,7 +623,13 @@ async function demo(L, R) {
   await L.say('poster', 'Her address stays private until she hires someone.');
   await L.type('#postJobForm [name=address]', JOB.address, 22);
   await L.type('#postJobForm [name=budget]', JOB.budget, 80);
-  await L.setValue('#postJobForm [name=job_date]', localDate(4));
+  await L.say('poster', 'Every job is a time slot. She picks the day, the start time and how long it takes.');
+  await L.setValue('#slotBox [name=job_date]', slotDay);
+  await L.pick('#slotBox [name=start_time]', JOB.start);
+  await L.pick('#slotBox [name=duration_minutes]', JOB.duration);
+  await L.point(await L.waitVisible('#slotBox .slot-end'));
+  await L.say('poster', 'The job runs from 10 in the morning to 2 in the afternoon.');
+  await sleep(800);
   await L.type('#postJobForm [name=details]', JOB.details, 22);
   await L.click('#postJobForm button[type=submit]', 300);
   await L.waitUrl('/dashboard');
@@ -573,11 +644,20 @@ async function demo(L, R) {
   await R.waitUrl('/jobs');
   await R.waitVisible('.trade-note');
   await R.say('meena', 'She only sees jobs that match her skills.');
-  await sleep(1500);
-  await R.say('meena', 'She applies for the painting job.');
+  await sleep(800);
+  await R.say('meena', 'Every job shows its day and time.');
+  await R.point(await R.findX(card(JOB.title) + "//div[contains(@class,'meta')]"));
+  await sleep(1200);
+  await R.say('meena', 'She applies for the bedroom job, from 10 to 2.');
   await R.click(await R.findX(card(JOB.title) + '//button[@data-apply]'), 900);
   await R.type('#appModal textarea[name=message]', '12 years of painting experience. I can start at 9am.', 30);
-  await R.click('#appModal button[type=submit]', 2200);
+  await R.click('#appModal button[type=submit]', 1800);
+  await R.findX(card(JOB.title) + "//span[contains(@class,'pill-accepted')]"); // "Applied ✓"
+  await R.say('meena', 'The living room job is on the same day, at the same time. She can apply for it too.');
+  await R.click(await R.findX(card(OVERLAP_JOB) + '//button[@data-apply]'), 900);
+  await R.click('#appModal button[type=submit]', 1800);
+  await R.point(await R.findX(card(OVERLAP_JOB) + "//span[contains(@class,'pill-accepted')]"));
+  await sleep(1000);
   await R.logout();
 
   await R.say('anil', 'Anil is also a painter. He applies for the same job.');
@@ -612,12 +692,23 @@ async function demo(L, R) {
   await L.say('poster', 'And she hires Meena.');
   await L.click(await L.findX("//div[contains(@class,'review')][.//strong[normalize-space()='Meena Patel']]//button[@data-hire]"), 2600);
   await L.say('poster', 'Meena got the job.');
+  await sleep(800);
+  await L.say('poster', 'Meena had also applied for the living room job at the same time. That application has now expired by itself.');
+  await L.click(await L.findX(card(OVERLAP_JOB) + '//button[@data-applicants]'), 1200);
+  await L.point(await L.waitVisible('#appModal .pill-expired'));
   await sleep(1500);
+  await L.click('#appModal .close', 800);
   await R.logout();
 
   // 5. Live work tracking
-  await R.say('meena', 'Meena logs in and sees her new booking.');
+  await R.say('meena', 'Meena logs in again.');
   await R.login('meena@demo.in', 'demo1234', 'meena');
+  await R.click('#tabs [data-tab="applications"]', 1200);
+  await R.say('meena', 'Her bedroom job is confirmed. The living room job at the same time has expired by itself.');
+  await R.point(await R.findX(card(OVERLAP_JOB) + "//span[contains(@class,'pill-expired')]"));
+  await sleep(1500);
+  await R.say('meena', 'She opens her bookings.');
+  await R.click('#tabs [data-tab="bookings"]', 1200);
   await R.waitVisible('[data-act="start"]');
   await R.say('meena', 'Now she can see the phone number, the address and a map.');
   await L.say('poster', 'Priya opens her bookings to follow the work.');
@@ -641,11 +732,18 @@ async function demo(L, R) {
   await L.waitUrl('/pay');
   await L.waitVisible('#payForm');
   await L.say('poster', 'This is a test payment. No real money is used.');
+  await sleep(800);
+  await L.say('poster', 'Priya can change the amount. The work was very good, so she pays 3,500 rupees instead of 3,000.');
+  const amount = await L.waitVisible('#payForm [name=amount]');
+  await L.click(amount, 300);
+  await L.js('arguments[0].value = ""; arguments[0].dispatchEvent(new Event("input", { bubbles: true }));', amount);
+  await L.type(amount, JOB.paid, 150);
+  await L.point(await L.find('#payDiff'));
   await sleep(1500);
   await L.click(await L.findX("//label[contains(@class,'chip')][.//span[normalize-space()='UPI']]"), 800);
   await L.click('#payForm button[type=submit]', 300);
   await L.waitVisible('.receipt');
-  await L.say('poster', 'The payment is successful.');
+  await L.say('poster', 'The payment of 3,500 rupees is successful.');
   await sleep(2000);
   await L.click('.receipt a.btn', 300);
   await L.waitUrl('/dashboard');
@@ -668,7 +766,7 @@ async function demo(L, R) {
   await L.login('admin@9to5.local', 'admin1234', 'admin');
   await L.click('#tabs [data-tab="bookings"]', 1500);
   await L.waitVisible('#tabBody .paid');
-  await sleep(2500);
+  await L.swipe('#tabBody .table-wrap', { back: false, hold: 3000 });
 
   // Outro
   await narrator.idle();
@@ -686,38 +784,207 @@ async function demo(L, R) {
 
 // ---------------- Video assembly ----------------
 
-function concatList(pane, t0, t1) {
-  const before = pane.frames.filter(f => f.t <= t0);
-  const frames = [...(before.length ? [before.at(-1)] : []), ...pane.frames.filter(f => f.t > t0 && f.t < t1)];
-  if (!frames.length) throw new Error(`No frames were captured for the ${pane.name} window.`);
+// ffconcat list that shows each image from its timestamp until the next one, covering exactly t0..t1.
+function concatList(name, items, t0, t1) {
+  const before = items.filter(f => f.t <= t0);
+  const list = [...(before.length ? [before.at(-1)] : []), ...items.filter(f => f.t > t0 && f.t < t1)];
+  if (!list.length) throw new Error(`Nothing was captured for the ${name} track.`);
   const lines = ['ffconcat version 1.0'];
-  frames.forEach((f, i) => {
+  list.forEach((f, i) => {
     const start = i === 0 ? t0 : f.t;
-    const end = i + 1 < frames.length ? frames[i + 1].t : t1;
-    lines.push(`file '${f.file.replace(/\\/g, '/')}'`, `duration ${((end - start) / 1000).toFixed(3)}`);
+    const end = i + 1 < list.length ? list[i + 1].t : t1;
+    // Long holds are split into short repeats: ffmpeg's fps filter waits for the next image, and overlaying
+    // full-HD frames while it waits many seconds runs out of memory.
+    for (let at = start; at < end; at += 500) {
+      lines.push(`file '${f.file.replace(/\\/g, '/')}'`, `duration ${((Math.min(at + 500, end) - at) / 1000).toFixed(3)}`);
+    }
   });
-  lines.push(`file '${frames.at(-1).file.replace(/\\/g, '/')}'`); // the last entry needs repeating for its duration to count
-  const file = path.join(FRAMES_DIR, pane.name + '.txt');
+  lines.push(`file '${list.at(-1).file.replace(/\\/g, '/')}'`); // the last entry needs repeating for its duration to count
+  const file = path.join(FRAMES_DIR, name + '.txt');
   fs.writeFileSync(file, lines.join('\n'));
   return file;
 }
 
-function buildVideo(L, R, t0, t1) {
+// Rounded rectangle as an SVG path, with separate top and bottom corner radii.
+function rr(x, y, w, h, rt, rb = rt) {
+  return `M${x + rt} ${y}H${x + w - rt}${rt ? `A${rt} ${rt} 0 0 1 ${x + w} ${y + rt}` : ''}V${y + h - rb}` +
+    `${rb ? `A${rb} ${rb} 0 0 1 ${x + w - rb} ${y + h}` : ''}H${x + rb}${rb ? `A${rb} ${rb} 0 0 1 ${x} ${y + h - rb}` : ''}` +
+    `V${y + rt}${rt ? `A${rt} ${rt} 0 0 1 ${x + rt} ${y}` : ''}Z`;
+}
+
+// The stage around the phones: background, phone bodies, status bars and the captions.
+// The screen areas are left transparent so the recorded screens show through from underneath.
+function stageHtml() {
+  const SR = 46; // screen corner radius
+  const phone = side => {
+    const x = PHONE_X[side], sx = x + BEZEL, sy = PHONE_Y + BEZEL;
+    const screen = rr(sx, sy, SCREEN_W, STATUS_H + SCREEN_H, SR);
+    const hole = rr(sx, HOLE_Y, SCREEN_W, SCREEN_H, 0, SR);
+    const cx = sx + SCREEN_W / 2;
+    return `
+      <path fill-rule="evenodd" fill="#0b0d12" d="${rr(x, PHONE_Y, PHONE_W, PHONE_H, SR + BEZEL)} ${screen}"/>
+      <path fill="none" stroke="#4b5563" stroke-width="2" d="${rr(x + 1, PHONE_Y + 1, PHONE_W - 2, PHONE_H - 2, SR + BEZEL - 1)}"/>
+      <path fill-rule="evenodd" fill="#ffffff" d="${screen} ${hole}"/>
+      <rect x="${cx - 52}" y="${sy + 7}" width="104" height="27" rx="13.5" fill="#000"/>
+      <text x="${sx + 34}" y="${sy + 27}" font-size="15" font-weight="700" fill="#0f172a">9:41</text>
+      <g fill="#0f172a">
+        <rect x="${sx + SCREEN_W - 92}" y="${sy + 22}" width="3.5" height="5" rx="1"/>
+        <rect x="${sx + SCREEN_W - 87}" y="${sy + 19}" width="3.5" height="8" rx="1"/>
+        <rect x="${sx + SCREEN_W - 82}" y="${sy + 16}" width="3.5" height="11" rx="1"/>
+        <rect x="${sx + SCREEN_W - 77}" y="${sy + 13}" width="3.5" height="14" rx="1"/>
+        <rect x="${sx + SCREEN_W - 64}" y="${sy + 14}" width="26" height="13" rx="3.5" fill="none" stroke="#0f172a" stroke-width="1.5"/>
+        <rect x="${sx + SCREEN_W - 62}" y="${sy + 16}" width="19" height="9" rx="2"/>
+        <rect x="${sx + SCREEN_W - 37}" y="${sy + 18.5}" width="2" height="4" rx="1"/>
+      </g>
+      <rect x="${x - 3}" y="${PHONE_Y + 180}" width="4" height="70" rx="2" fill="#1f2937"/>
+      <rect x="${x + PHONE_W - 1}" y="${PHONE_Y + 150}" width="4" height="46" rx="2" fill="#1f2937"/>
+      <rect x="${x + PHONE_W - 1}" y="${PHONE_Y + 210}" width="4" height="46" rx="2" fill="#1f2937"/>`;
+  };
+  const outline = side => rr(PHONE_X[side], PHONE_Y, PHONE_W, PHONE_H, SR + BEZEL);
+  const panelW = PHONE_X.left - 60 - 46;
+  const logo = 'file:///' + path.join(ROOT, 'public', 'assets', 'logo.svg').replace(/\\/g, '/');
+  return `<!doctype html><html><head><meta charset="utf-8"><style>
+    *{box-sizing:border-box;margin:0}
+    html,body{width:1920px;height:1080px;overflow:hidden;background:transparent;font-family:"Segoe UI",system-ui,sans-serif}
+    svg{position:absolute;inset:0}
+    .panel{position:absolute;top:${PHONE_Y + 10}px;height:${PHONE_H - 20}px;width:${panelW}px;display:flex;flex-direction:column;color:#fff}
+    .panel.left{left:60px;text-align:right;align-items:flex-end}
+    .panel.right{left:${PHONE_X.right + PHONE_W + 46}px;text-align:left;align-items:flex-start}
+    .brand{display:flex;align-items:center;gap:12px;font-size:30px;font-weight:800}
+    .brand img{width:46px;height:46px}
+    .live{display:flex;align-items:center;gap:10px;font-size:22px;font-weight:700;color:#e2e8f0}
+    .live i{width:12px;height:12px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 5px rgba(239,68,68,.25)}
+    .device{margin-top:26px;font-size:15px;letter-spacing:.14em;text-transform:uppercase;color:#94a3b8;font-weight:700}
+    .device b{display:block;margin-top:4px;font-size:22px;letter-spacing:0;text-transform:none;color:#e2e8f0}
+    .cap{margin:auto 0;transition:none}
+    .cap.dim{opacity:.38}
+    .chip{display:inline-block;padding:6px 14px;border-radius:999px;font-size:16px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}
+    .text{font-size:34px;line-height:1.3;font-weight:600}
+  </style></head><body>
+  <svg width="1920" height="1080" viewBox="0 0 1920 1080">
+    <defs>
+      <linearGradient id="stagebg" x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" stop-color="#0f1b3d"/><stop offset=".55" stop-color="#0b1730"/><stop offset="1" stop-color="#0b2a2e"/>
+      </linearGradient>
+    </defs>
+    <path id="bg" fill-rule="evenodd" fill="url(#stagebg)" d="M0 0H1920V1080H0Z ${outline('left')} ${outline('right')}"/>
+    <g id="phones">${phone('left')}${phone('right')}</g>
+  </svg>
+  <div class="panel left">
+    <div class="brand"><span>9 to 5</span><img src="${logo}" alt=""></div>
+    <div class="device">Phone 1<b>Admin &amp; Job Poster</b></div>
+    <div class="cap" id="cap-left"></div>
+  </div>
+  <div class="panel right">
+    <div class="live"><i></i>Live demo</div>
+    <div class="device">Phone 2<b>Labourers</b></div>
+    <div class="cap" id="cap-right"></div>
+  </div>
+  <script>
+    // 'frame': only the phone bodies (they never change). 'captions': background and captions, no phones.
+    function setMode(mode) {
+      document.getElementById('phones').style.display = mode === 'frame' ? '' : 'none';
+      document.getElementById('bg').style.display = mode === 'frame' ? 'none' : '';
+      document.querySelectorAll('.panel').forEach(p => (p.style.display = mode === 'frame' ? 'none' : ''));
+    }
+    function setState(s) {
+      for (const side of ['left', 'right']) {
+        const el = document.getElementById('cap-' + side), c = s[side];
+        el.innerHTML = '';
+        el.classList.toggle('dim', !!s.active && s.active !== side);
+        if (!c) continue;
+        const chip = document.createElement('div');
+        chip.className = 'chip';
+        chip.style.background = c.color;
+        chip.textContent = c.role;
+        const text = document.createElement('div');
+        text.className = 'text';
+        text.textContent = c.text;
+        el.append(chip, text);
+      }
+    }
+  </script></body></html>`;
+}
+
+// Renders the phone frame once (transparent PNG) and one PNG of the background + captions per caption change.
+async function renderStage(t0, t1) {
+  console.log('Drawing the phone frames and captions...');
+  const dir = path.join(FRAMES_DIR, 'stage');
+  fs.mkdirSync(dir, { recursive: true });
+  const html = path.join(FRAMES_DIR, 'stage.html');
+  fs.writeFileSync(html, stageHtml());
+
+  const cur = { left: null, right: null, active: null };
+  const states = [{ t: t0, state: { ...cur } }];
+  for (const c of captions.filter(c => c.t > t0 && c.t < t1).sort((a, b) => a.t - b.t)) {
+    cur[c.side] = c.text ? { role: c.role, color: c.color, text: c.text } : null;
+    if (c.text) cur.active = c.side;
+    states.push({ t: c.t, state: { ...cur } });
+  }
+
+  const d = await new Builder().forBrowser('chrome')
+    .setChromeOptions(new chrome.Options().addArguments('--headless=new', '--window-size=1920,1080', '--hide-scrollbars', '--allow-file-access-from-files'))
+    .build();
+  try {
+    await d.sendDevToolsCommand('Emulation.setDeviceMetricsOverride', { width: 1920, height: 1080, deviceScaleFactor: 1, mobile: false });
+    await d.sendDevToolsCommand('Emulation.setDefaultBackgroundColorOverride', { color: { r: 0, g: 0, b: 0, a: 0 } });
+    await d.get('file:///' + html.replace(/\\/g, '/'));
+    await d.wait(async () => d.executeScript('return document.fonts.status === "loaded" && [...document.images].every(i => i.complete)'), 10000);
+    const shot = async file => {
+      const { data } = await d.sendAndGetDevToolsCommand('Page.captureScreenshot', { format: 'png', clip: { x: 0, y: 0, width: 1920, height: 1080, scale: 1 } });
+      fs.writeFileSync(file, data, 'base64');
+    };
+    const frame = path.join(dir, 'phones.png');
+    await d.executeScript('setMode("frame")');
+    await shot(frame);
+    await d.executeScript('setMode("captions")');
+    const states2 = [];
+    for (const [i, s] of states.entries()) {
+      await d.executeScript('setState(arguments[0])', s.state);
+      const file = path.join(dir, String(i).padStart(4, '0') + '.png');
+      await shot(file);
+      states2.push({ t: s.t, file });
+    }
+    return { frame, captions: states2 };
+  } finally {
+    await d.quit();
+  }
+}
+
+async function buildVideo(L, R, t0, t1) {
+  const stage = await renderStage(t0, t1);
   console.log('Encoding video...');
-  const scale = `fps=30,scale=${PANE_W}:${PANE_H}:force_original_aspect_ratio=decrease,pad=${PANE_W}:${PANE_H}:(ow-iw)/2:0:white,setsar=1`;
+  const duration = ((t1 - t0) / 1000).toFixed(3);
+  // Pass 1: the background and captions on their own, as an ordinary video (cheap to overlay onto later).
+  const backdrop = path.join(FRAMES_DIR, 'backdrop.mp4');
+  execFileSync(ffmpeg, [
+    '-y', '-loglevel', 'error', '-f', 'concat', '-safe', '0', '-i', concatList('stage', stage.captions, t0, t1),
+    '-vf', 'fps=30,format=yuv420p', '-t', duration, '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '16', backdrop,
+  ], { stdio: 'inherit' });
+
+  // Pass 2: phone screens onto the backdrop, the phone frames on top, plus the narration.
+  const screen = `fps=30,scale=${SCREEN_W}:${SCREEN_H}:flags=lanczos,setsar=1`;
   // Each spoken sentence is delayed to the moment its caption appeared, then all are mixed into one track.
   const lines = narrator.lines.filter(l => l.t >= t0);
-  const voices = lines.map((l, i) => `[${3 + i}:a]adelay=${l.t - t0}:all=1[a${i}]`);
+  const voices = lines.map((l, i) => `[${4 + i}:a]adelay=${l.t - t0}:all=1[a${i}]`);
   const mix = `${lines.map((_, i) => `[a${i}]`).join('')}amix=inputs=${lines.length}:normalize=0:dropout_transition=0,apad[a]`;
   execFileSync(ffmpeg, [
     '-y', '-loglevel', 'error',
-    '-f', 'concat', '-safe', '0', '-i', concatList(L, t0, t1),
-    '-f', 'concat', '-safe', '0', '-i', concatList(R, t0, t1),
-    '-f', 'lavfi', '-i', `color=c=0x0f172a:s=4x${PANE_H}:r=30`,
+    '-i', backdrop,
+    '-f', 'concat', '-safe', '0', '-i', concatList('left', L.frames, t0, t1),
+    '-f', 'concat', '-safe', '0', '-i', concatList('right', R.frames, t0, t1),
+    '-loop', '1', '-framerate', '30', '-i', stage.frame,
     ...lines.flatMap(l => ['-i', l.file]),
-    '-filter_complex', [`[0:v]${scale}[l]`, `[1:v]${scale}[r]`, `[l][2:v][r]hstack=inputs=3:shortest=1,format=yuv420p[v]`, ...voices, mix].join(';'),
-    '-map', '[v]', '-map', '[a]', '-t', ((t1 - t0) / 1000).toFixed(3),
-    '-c:v', 'libx264', '-preset', 'medium', '-crf', '20', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', VIDEO,
+    '-filter_complex', [
+      `[1:v]${screen}[l]`,
+      `[2:v]${screen}[r]`,
+      `[0:v][l]overlay=${holeX('left')}:${HOLE_Y}[b1]`,
+      `[b1][r]overlay=${holeX('right')}:${HOLE_Y}[b2]`,
+      `[b2][3:v]overlay=0:0:shortest=1,format=yuv420p[v]`,
+      ...voices, mix,
+    ].join(';'),
+    '-map', '[v]', '-map', '[a]', '-t', duration,
+    '-c:v', 'libx264', '-preset', 'medium', '-crf', '19', '-c:a', 'aac', '-b:a', '160k', '-movflags', '+faststart', VIDEO,
   ], { stdio: 'inherit' });
 }
 
@@ -728,6 +995,10 @@ async function main() {
   if (process.argv.includes('--restore')) {
     if (!fs.existsSync(BACKUP)) return console.log('No backup to restore: your data is already in place.');
     return restoreDb();
+  }
+  if (process.argv.includes('--encode-only')) {
+    if (!fs.existsSync(TIMELINE)) throw new Error('No recording to encode: run npm run demo:record first.');
+    return encode();
   }
   // A leftover backup means an earlier run was interrupted before restoring: put that data back first.
   if (fs.existsSync(BACKUP)) {
@@ -776,12 +1047,21 @@ async function main() {
   }
   if (!times) return;
 
-  buildVideo(L, R, times.t0, times.t1);
-  fs.rmSync(FRAMES_DIR, { recursive: true, force: true });
-  console.log(`\nDone! Video saved to ${VIDEO} (${Math.round((times.t1 - times.t0) / 1000)} seconds)`);
+  // Saved so `-- --encode-only` can rebuild the video from these frames without recording again.
+  fs.writeFileSync(TIMELINE, JSON.stringify({ ...times, left: L.frames, right: R.frames, captions, voice: narrator.lines }));
+  await encode();
 }
 
-main().catch(err => {
+async function encode() {
+  const rec = JSON.parse(fs.readFileSync(TIMELINE, 'utf8'));
+  captions.splice(0, captions.length, ...rec.captions);
+  narrator.lines = rec.voice;
+  await buildVideo({ frames: rec.left }, { frames: rec.right }, rec.t0, rec.t1);
+  fs.rmSync(FRAMES_DIR, { recursive: true, force: true });
+  console.log(`\nDone! Video saved to ${VIDEO} (${Math.round((rec.t1 - rec.t0) / 1000)} seconds)`);
+}
+
+main().then(() => process.exit(process.exitCode || 0)).catch(err => {
   console.error(err);
   console.error(fs.existsSync(BACKUP) ? `\nYour data backup is still at ${BACKUP}. Run: npm run demo:record -- --restore` : '');
   process.exit(1);

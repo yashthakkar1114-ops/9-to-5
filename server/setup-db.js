@@ -50,8 +50,20 @@ async function migrate(conn) {
       SET b.address = COALESCE(NULLIF(j.address, ''), j.location, p.area) WHERE b.address = ''`);
     console.log('Upgraded: bookings now have an address and payment details.');
   }
+  // Jobs and bookings are booked in time slots; older rows become a 9-to-5 day.
+  for (const table of ['jobs', 'bookings']) {
+    if (!(await hasColumn(table, 'start_time'))) {
+      const after = table === 'jobs' ? 'job_date' : 'booking_date';
+      await conn.query(`ALTER TABLE ${table}
+        ADD COLUMN start_time TIME NOT NULL DEFAULT '09:00:00' AFTER ${after},
+        ADD COLUMN duration_minutes SMALLINT NOT NULL DEFAULT 480 AFTER start_time`);
+      console.log(`Upgraded: ${table} now have a start time and duration.`);
+    }
+  }
   await conn.query(`ALTER TABLE bookings MODIFY status
-    ENUM('pending','accepted','started','in_progress','completed','rejected','cancelled') NOT NULL DEFAULT 'pending'`);
+    ENUM('pending','accepted','started','in_progress','completed','rejected','cancelled','expired') NOT NULL DEFAULT 'pending'`);
+  await conn.query(`ALTER TABLE applications MODIFY status
+    ENUM('pending','accepted','rejected','expired') NOT NULL DEFAULT 'pending'`);
 
   // Start a new area list with defaults, plus any areas labourers already use so their profiles stay valid.
   const [[{ areaCount }]] = await conn.query('SELECT COUNT(*) AS areaCount FROM areas');
@@ -109,11 +121,13 @@ async function main() {
   }
   const inDays = d => new Date(Date.now() + d * 864e5).toISOString().slice(0, 10);
   await conn.query(
-    `INSERT INTO jobs (poster_id, title, trade, location, address, budget, job_date, details) VALUES
-     (?, 'Fix bathroom leak', 'Plumber', 'Bandra', '12 Hill Road, Bandra West, Mumbai 400050', 500, ?, 'Water leaking under the wash basin.'),
-     (?, 'Paint 2BHK living room', 'Painter', 'Andheri', '4B Lokhandwala Complex, Andheri West, Mumbai 400053', 4500, ?, 'Walls only, paint will be provided.'),
-     (?, 'Install 3 ceiling fans', 'Electrician', 'Powai', 'Hiranandani Gardens, Powai, Mumbai 400076', 900, ?, 'Fans already bought, need fitting + wiring check.')`,
-    [poster.insertId, inDays(3), poster.insertId, inDays(7), poster.insertId, inDays(5)]
+    `INSERT INTO jobs (poster_id, title, trade, location, address, budget, job_date, start_time, duration_minutes, details) VALUES
+     (?, 'Fix bathroom leak', 'Plumber', 'Bandra', '12 Hill Road, Bandra West, Mumbai 400050', 500, ?, '10:00', 120, 'Water leaking under the wash basin.'),
+     (?, 'Replace kitchen tap', 'Plumber', 'Andheri', '7 Versova Road, Andheri West, Mumbai 400061', 400, ?, '11:00', 90, 'New tap is ready, just needs fitting.'),
+     (?, 'Paint 2BHK living room', 'Painter', 'Andheri', '4B Lokhandwala Complex, Andheri West, Mumbai 400053', 4500, ?, '09:00', 480, 'Walls only, paint will be provided.'),
+     (?, 'Install 3 ceiling fans', 'Electrician', 'Powai', 'Hiranandani Gardens, Powai, Mumbai 400076', 900, ?, '14:00', 180, 'Fans already bought, need fitting + wiring check.')`,
+    // The first two overlap (10:00-12:00 and 11:00-12:30 on the same day) to show that a labourer can only take one.
+    [poster.insertId, inDays(3), poster.insertId, inDays(3), poster.insertId, inDays(7), poster.insertId, inDays(5)]
   );
 
   console.log('Demo data added:');

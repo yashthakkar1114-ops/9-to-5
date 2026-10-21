@@ -636,3 +636,11 @@ body.landing{ background:#fff; }
 .pay-quick{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:16px; }
 .chip-btn{ border:1px solid rgba(12,20,40,0.12); background:#fff; color:#253245; border-radius:999px; padding:6px 12px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
 .chip-btn:hover{ border-color:var(--accent); color:var(--accent); background:#eef4ff; }
+
+/* ---- time slots ---- */
+.slot-fields{ display:grid; grid-template-columns:1.3fr 1fr 1fr; gap:0 12px; }
+.slot-end{ margin:-6px 0 14px; font-size:13px; }
+.clash-note{ display:inline-block; font-size:12px; font-weight:700; color:#b45309; background:#fff4db; padding:4px 10px; border-radius:999px; }
+@media (max-width:600px){ .slot-fields{ grid-template-columns:1fr 1fr; } .slot-fields label:first-child{ grid-column:1 / -1; } }
+.pill.pill-text{ text-transform:none; }
+.pill-expired{ background:#eef1f5; color:#6b7280; }

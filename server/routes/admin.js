@@ -59,7 +59,7 @@ router.patch('/users/:id', async (req, res) => {
 // GET /api/admin/jobs
 router.get('/jobs', async (req, res) => {
   const jobs = await query(
-    `SELECT j.id, j.title, j.trade, j.location, j.budget, j.job_date, j.status, j.created_at, u.name AS poster_name
+    `SELECT j.id, j.title, j.trade, j.location, j.budget, j.job_date, j.start_time, j.duration_minutes, j.status, j.created_at, u.name AS poster_name
      FROM jobs j JOIN users u ON u.id = j.poster_id ORDER BY j.created_at DESC LIMIT 200`
   );
   res.json({ jobs });
@@ -75,7 +75,7 @@ router.delete('/jobs/:id', async (req, res) => {
 // GET /api/admin/bookings
 router.get('/bookings', async (req, res) => {
   const bookings = await query(
-    `SELECT b.id, b.booking_date, b.amount, b.status, b.paid_at, b.created_at, p.name AS poster_name, l.name AS labourer_name
+    `SELECT b.id, b.booking_date, b.start_time, b.duration_minutes, b.amount, b.status, b.paid_at, b.created_at, p.name AS poster_name, l.name AS labourer_name
      FROM bookings b JOIN users p ON p.id = b.poster_id JOIN users l ON l.id = b.labourer_id
      ORDER BY b.created_at DESC LIMIT 200`
   );

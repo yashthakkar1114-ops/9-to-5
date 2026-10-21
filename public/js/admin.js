@@ -59,7 +59,7 @@
       </tr></thead><tbody>${jobs.map(j => `
         <tr>
           <td><strong>${esc(j.title)}</strong></td><td>${esc(j.trade)}</td><td>${esc(j.location)}</td>
-          <td>${rupees(j.budget)}</td><td>${fmtDate(j.job_date)}</td><td>${esc(j.poster_name)}</td>
+          <td>${rupees(j.budget)}</td><td>${fmtDate(j.job_date)}<br><span class="muted">${timeRange(j.start_time, j.duration_minutes)}</span></td><td>${esc(j.poster_name)}</td>
           <td>${pill(j.status)}</td>
           <td><button class="btn small danger" data-delete="${j.id}" type="button">Remove</button></td>
         </tr>`).join('') || '<tr><td colspan="8" class="empty">No jobs yet.</td></tr>'}</tbody></table></div>`;
@@ -73,7 +73,7 @@
       </tr></thead><tbody>${bookings.map(b => `
         <tr>
           <td>${b.id}</td><td>${esc(b.poster_name)}</td><td>${esc(b.labourer_name)}</td>
-          <td>${fmtDate(b.booking_date)}</td><td>${rupees(b.amount)}</td><td>${pill(b.status)}</td>
+          <td>${fmtDate(b.booking_date)}<br><span class="muted">${timeRange(b.start_time, b.duration_minutes)}</span></td><td>${rupees(b.amount)}</td><td>${pill(b.status)}</td>
           <td>${b.paid_at ? `<span class="paid">✔ Paid</span>` : b.status === 'completed' ? '<span class="muted">Unpaid</span>' : '—'}</td>
           <td>${fmtDate(b.created_at)}</td>
         </tr>`).join('') || '<tr><td colspan="8" class="empty">No bookings yet.</td></tr>'}</tbody></table></div>`;

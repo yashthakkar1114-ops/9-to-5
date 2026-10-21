@@ -34,6 +34,47 @@ const tradeBadges = s => splitTrades(s).map(t => `<span class="badge">${esc(t)}<
 const tradeChecks = (selected = '') => `<div class="chips">${TRADES.map(t => `
   <label class="chip"><input type="checkbox" name="trades" value="${t}" ${splitTrades(selected).includes(t) ? 'checked' : ''}><span>${t}</span></label>`).join('')}</div>`;
 
+// ---- Time slots: every job/booking has a date, a start time and a duration (minutes) ----
+const toMinutes = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + m; };
+const clock = mins => {
+  const h = Math.floor(mins / 60) % 24, m = mins % 60;
+  return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+};
+const fmtTime = t => clock(toMinutes(t));
+const fmtDuration = mins => [Math.floor(mins / 60) && `${Math.floor(mins / 60)} h`, mins % 60 && `${mins % 60} min`].filter(Boolean).join(' ');
+// '10:00 am – 12:00 pm (2 h)'; marks slots that run past midnight.
+const timeRange = (start, mins) => {
+  const begin = toMinutes(start), end = begin + Number(mins);
+  return `${clock(begin)} – ${clock(end)}${end > 1440 ? ' (next day)' : ''} (${fmtDuration(Number(mins))})`;
+};
+const slotText = (date, start, mins) => `${fmtDate(date)} · ${timeRange(start, mins)}`;
+
+const START_TIMES = Array.from({ length: (22 - 5) * 2 + 1 }, (_, i) => 5 * 60 + i * 30); // 5:00 am to 10:00 pm
+const DURATIONS = [30, 60, 90, 120, 150, 180, 240, 300, 360, 420, 480, 540, 600, 720];
+const timeOptions = (selected = '09:00') => START_TIMES.map(m => {
+  const v = `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  return `<option value="${v}" ${v === String(selected).slice(0, 5) ? 'selected' : ''}>${clock(m)}</option>`;
+}).join('');
+const durationOptions = (selected = 120) => DURATIONS.map(d =>
+  `<option value="${d}" ${d === Number(selected) ? 'selected' : ''}>${fmtDuration(d)}</option>`).join('');
+
+// Date + start time + duration pickers with a live "ends at" line. `names` lets the date field be job_date or booking_date.
+function slotFields({ dateName = 'job_date', date = '', start = '09:00', minutes = 120 } = {}) {
+  return `<div class="slot-fields">
+      <label>Date <input name="${dateName}" type="date" required min="${today()}" value="${esc(date)}"></label>
+      <label>Start time <select name="start_time" required>${timeOptions(start)}</select></label>
+      <label>Duration <select name="duration_minutes" required>${durationOptions(minutes)}</select></label>
+    </div>
+    <p class="slot-end muted" aria-live="polite"></p>`;
+}
+function bindSlotFields(root) {
+  const start = $('[name=start_time]', root), dur = $('[name=duration_minutes]', root), out = $('.slot-end', root);
+  const update = () => (out.textContent = `Runs ${timeRange(start.value, dur.value)}`);
+  start.addEventListener('change', update);
+  dur.addEventListener('change', update);
+  update();
+}
+
 // Areas are managed by the admin.
 async function areaOptions(selected = '', placeholder = 'Choose your area') {
   const { areas } = await api('/areas');

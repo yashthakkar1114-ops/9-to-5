@@ -15,6 +15,11 @@ A web app for finding and hiring local daily-wage labourers (plumbers, carpenter
 | Edit profile and set availability | See applicants and hire one | Add and remove the areas labourers can pick |
 | See bookings, applications, payments and ratings | Pay through a mock payment page, then leave a 1–5★ review | See stats, all bookings and payment status |
 
+- Every job and booking is a **time slot**: a date, a start time and a duration (30 min to 12 h).
+  A labourer may apply to (and be requested for) several jobs in the same slot, but only one can be confirmed:
+  whichever poster hires first (or whichever request the labourer accepts first) wins, and the labourer's other
+  overlapping applications and requests **expire automatically**. New requests, applications and hires that overlap a
+  confirmed slot are blocked, and clashes are flagged on Browse Jobs, applicants and pending requests.
 - Phone numbers and the work address (with a map pin link) are only shared once a booking is accepted.
 - New passwords need 8+ characters with an uppercase letter, a lowercase letter, a number and a special character; signup shows a live checklist.
 - Labourer accounts can't open the "Find Labourers" page, which is for job posters.

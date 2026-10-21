@@ -44,6 +44,10 @@
 
   function bookingActions(b) {
     if (me.role === 'labourer') {
+      if (b.status === 'pending' && b.clash) {
+        return `<span class="clash-note">⚠ Overlaps a job you already accepted</span>
+                <button class="btn small ghost" data-act="reject" data-id="${b.id}" type="button">Reject</button>`;
+      }
       if (b.status === 'pending') {
         return `<button class="btn small success" data-act="accept" data-id="${b.id}" type="button">Accept</button>
                 <button class="btn small ghost" data-act="reject" data-id="${b.id}" type="button">Reject</button>`;
@@ -84,13 +88,16 @@
           <div class="meta">
             <span>${who}: <strong>${esc(b.other_name)}</strong></span>
             ${b.trade ? `<span>🛠 ${esc(splitTrades(b.trade).join(', '))}</span>` : ''}
-            <span>📅 ${fmtDate(b.booking_date)}</span>
+            <span>🕒 ${slotText(b.booking_date, b.start_time, b.duration_minutes)}</span>
             ${b.other_phone ? `<span>📞 <a href="tel:${esc(b.other_phone)}">${esc(b.other_phone)}</a></span>` : ''}
             ${b.job_id ? '<span>via job post</span>' : '<span>direct booking</span>'}
           </div>
           <div class="meta" style="margin-top:4px">${addressLine(b)}</div>
           ${tracker(b.status)}
           ${b.rating ? `<p class="details"><span class="stars">${'★'.repeat(b.rating)}</span> ${esc(b.comment)}</p>` : ''}
+          ${b.status === 'expired' ? `<p class="details muted">Expired: ${me.role === 'poster'
+            ? `${esc(b.other_name)} was booked for another job at this time.`
+            : 'you were booked for another job at this time.'}</p>` : ''}
         </div>
         <div class="side">
           <div class="price">${rupees(b.amount)}</div>
@@ -184,7 +191,7 @@
         <div>
           <h3>${esc(j.title)}</h3>
           <div class="meta">
-            <span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span><span>📅 ${fmtDate(j.job_date)}</span>
+            <span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span><span>🕒 ${slotText(j.job_date, j.start_time, j.duration_minutes)}</span>
             ${j.hired_name ? `<span>Hired: <strong>${esc(j.hired_name)}</strong> ${j.work_status ? pill(j.work_status) : ''}</span>` : ''}
           </div>
           ${j.address ? `<div class="meta" style="margin-top:4px"><span>🏠 ${esc(j.address)} ·
@@ -205,7 +212,7 @@
 
   async function applicantsModal(jobId) {
     const { job, applications } = await api(`/jobs/${jobId}/applications`);
-    const m = openModal(`Applicants — ${job.title}`, applications.map(a => `
+    const m = openModal(`Applicants — ${job.title}`, `<p class="muted" style="margin-top:0">🕒 ${slotText(job.job_date, job.start_time, job.duration_minutes)}</p>` + applications.map(a => `
       <div class="review" style="display:flex;gap:12px;align-items:center">
         <div class="avatar">${esc(initials(a.name))}</div>
         <div style="flex:1">
@@ -213,9 +220,14 @@
           <div class="muted">${esc(splitTrades(a.trades).join(', '))} · ${esc(a.area)} · ${rupees(a.daily_rate)}/day · ${a.experience} yrs · ${stars(a.rating_avg, a.rating_count)}</div>
           ${a.message ? `<div>“${esc(a.message)}”</div>` : ''}
         </div>
-        ${a.status === 'pending'
+        ${a.status === 'pending' && a.busy
+          ? `<div class="actions"><span class="clash-note" title="They took another job at this time">Booked at this time</span>
+             <button class="btn small ghost" data-reject="${a.id}" type="button">Reject</button></div>`
+          : a.status === 'pending'
           ? `<div class="actions"><button class="btn small success" data-hire="${a.id}" type="button">Hire</button>
              <button class="btn small ghost" data-reject="${a.id}" type="button">Reject</button></div>`
+          : a.status === 'expired'
+          ? '<span class="pill pill-expired" title="They were booked for another job at this time">expired</span>'
           : pill(a.status)}
       </div>`).join('') || '<p class="muted">No one has applied yet. Check back soon.</p>');
     // onclick (not addEventListener): the modal body is reused, so listeners would pile up across opens.
@@ -267,16 +279,17 @@
         <div>
           <h3>${esc(a.title)}</h3>
           <div class="meta"><span>🛠 ${esc(a.trade)}</span><span>📍 ${esc(a.location)}</span>
-            <span>📅 ${fmtDate(a.job_date)}</span><span>👤 ${esc(a.poster_name)}</span></div>
+            <span>🕒 ${slotText(a.job_date, a.start_time, a.duration_minutes)}</span><span>👤 ${esc(a.poster_name)}</span></div>
           ${a.message ? `<p class="details">Your message: “${esc(a.message)}”</p>` : ''}
           ${a.status === 'rejected' ? '<p class="details error">The poster did not select you for this job.</p>' : ''}
+          ${a.status === 'expired' ? '<p class="details muted">Expired: you were booked for another job at this time.</p>' : ''}
           ${a.status === 'accepted' ? `<p class="details success">You were hired!${a.work_status ? ` Work status: ${pill(a.work_status)}` : ''}
             See the Bookings tab for the map and contact details.</p>` : ''}
           ${a.address ? `<div class="meta" style="margin-top:6px"><span>📍 <strong>${esc(a.address)}</strong> ·
             <a href="${directionsLink(a.address)}" target="_blank" rel="noopener">Get directions ↗</a></span></div>` : ''}
         </div>
         <div class="side"><div class="price">${rupees(a.budget)}</div>${a.status === 'rejected'
-          ? '<span class="pill pill-rejected">Not selected</span>' : pill(a.status)}</div>
+          ? '<span class="pill pill-rejected pill-text">Not selected</span>' : pill(a.status)}</div>
       </div>`).join('') || '<div class="card empty">You have not applied to any jobs yet. <a href="/jobs">Browse open jobs</a>.</div>';
   }
 

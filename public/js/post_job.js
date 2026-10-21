@@ -3,10 +3,15 @@
   await requireLogin('poster');
   const form = $('#postJobForm');
   $('#tradeSelect').innerHTML = '<option value="">Choose a trade</option>' + tradeOptions();
-  form.job_date.min = today();
 
   const editId = new URLSearchParams(location.search).get('edit');
   const job = editId ? (await api('/jobs/mine')).jobs.find(j => j.id == editId) : null;
+
+  // Every job is a time slot: date + start time + duration.
+  $('#slotBox').insertAdjacentHTML('beforeend', slotFields(job
+    ? { date: job.job_date, start: job.start_time, minutes: job.duration_minutes }
+    : {}));
+  bindSlotFields($('#slotBox'));
 
   // Locations come from the admin's area list (an older job keeps its current location as an option).
   try {
@@ -18,7 +23,7 @@
   if (job) {
     $('#formTitle').textContent = 'Edit Job';
     $('button[type=submit]', form).textContent = 'Save changes';
-    for (const k of ['title', 'trade', 'location', 'address', 'budget', 'job_date', 'details']) form[k].value = job[k] ?? '';
+    for (const k of ['title', 'trade', 'location', 'address', 'budget', 'details']) form[k].value = job[k] ?? '';
   }
 
   handleForm(form, async data => {

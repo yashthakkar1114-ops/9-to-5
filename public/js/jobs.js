@@ -15,8 +15,11 @@
 
   function applyButton(j) {
     if (me?.role === 'poster' || me?.role === 'admin') return '';
-    if (j.my_application === 'rejected') return '<span class="pill pill-rejected">Not selected</span>';
+    if (j.my_application === 'rejected') return '<span class="pill pill-rejected pill-text">Not selected</span>';
+    if (j.my_application === 'expired') return '<span class="pill pill-expired pill-text" title="You were booked for another job at this time">Expired</span>';
     if (j.my_application) return '<span class="pill pill-accepted">Applied ✓</span>';
+    // A labourer can only hold one job at a time, so overlapping jobs can't be applied to.
+    if (j.clash) return '<span class="pill pill-rejected pill-text" title="You already have work booked at this time">Clashes with your booking</span>';
     return `<button class="btn small" data-apply="${j.id}" type="button">Apply</button>`;
   }
 
@@ -31,7 +34,7 @@
           <h3>${esc(j.title)}</h3>
           <div class="meta">
             <span>🛠 ${esc(j.trade)}</span><span>📍 ${esc(j.location)}</span>
-            <span>📅 ${fmtDate(j.job_date)}</span><span>👤 ${esc(j.poster_name)}</span>
+            <span>🕒 ${slotText(j.job_date, j.start_time, j.duration_minutes)}</span><span>👤 ${esc(j.poster_name)}</span>
             <span>${j.applicant_count} applied</span>
           </div>
           ${j.details ? `<p class="details">${esc(j.details)}</p>` : ''}
@@ -46,7 +49,7 @@
   function apply(job) {
     if (!me) return (location.href = '/login?role=labourer&next=/jobs');
     const body = openModal(`Apply: ${job.title}`, `
-      <p class="muted">${esc(job.trade)} · ${esc(job.location)} · ${fmtDate(job.job_date)} · ${rupees(job.budget)}</p>
+      <p class="muted">${esc(job.trade)} · ${esc(job.location)} · ${slotText(job.job_date, job.start_time, job.duration_minutes)} · ${rupees(job.budget)}</p>
       <form class="form-card" style="padding:0">
         <label>Message to the poster (optional)
           <textarea name="message" rows="3" maxlength="255" placeholder="e.g. I have 5 years experience with this work and can come at 10am."></textarea></label>
